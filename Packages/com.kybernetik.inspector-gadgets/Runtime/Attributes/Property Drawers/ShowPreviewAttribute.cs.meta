@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: f4197f840c1b9894c9a9dbed9ed5e46d
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 83013
+  packageName: Inspector Gadgets Pro
+  packageVersion: 8.0.1
+  assetPath: Packages/com.kybernetik.inspector-gadgets/Runtime/Attributes/Property
+    Drawers/ShowPreviewAttribute.cs
+  uploadId: 713225

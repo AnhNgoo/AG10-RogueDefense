@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: c6104f7638f8dcd45abff9b4f62b550e
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 83013
+  packageName: Inspector Gadgets Pro
+  packageVersion: 8.0.1
+  assetPath: Packages/com.kybernetik.inspector-gadgets/Runtime/Attributes/Property
+    Drawers/ColorAttribute.cs
+  uploadId: 713225

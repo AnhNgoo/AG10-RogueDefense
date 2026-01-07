@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 871d02cd4e1e0a14085bac8d9ee00196
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 83013
+  packageName: Inspector Gadgets Pro
+  packageVersion: 8.0.1
+  assetPath: Packages/com.kybernetik.inspector-gadgets/Runtime/Attributes/Inspectables/InspectableAttribute.cs
+  uploadId: 713225

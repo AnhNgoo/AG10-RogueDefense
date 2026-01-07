@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 0d83695f9a0afc54d8714dbf7ca4da06
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 83013
+  packageName: Inspector Gadgets Pro
+  packageVersion: 8.0.1
+  assetPath: Packages/com.kybernetik.inspector-gadgets/Runtime/Attributes/Inspectables/ButtonAttribute.cs
+  uploadId: 713225

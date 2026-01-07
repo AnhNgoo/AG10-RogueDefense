@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: 37208d9490c2b5e49bb376934c34a5f5
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 83013
+  packageName: Inspector Gadgets Pro
+  packageVersion: 8.0.1
+  assetPath: Packages/com.kybernetik.inspector-gadgets/Runtime/Attributes/Validator
+    Attributes/ClampValueAttribute.cs
+  uploadId: 713225

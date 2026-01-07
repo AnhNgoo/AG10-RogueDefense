@@ -1,0 +1,46 @@
+# Unity 3D Project Git LFS Tracking
+*.unity - text - merge
+*.unity.meta - text - merge
+*.asset - binary
+*.asset.meta - text - merge
+*.prefab - binary
+*.prefab.meta - text - merge
+*.controller - binary
+*.controller.meta - text - merge
+*.mat - binary
+*.mat.meta - text - merge
+*.anim - binary
+*.anim.meta - text - merge
+*.fbx - binary filter=lfs diff=lfs merge=lfs
+*.FBX - binary filter=lfs diff=lfs merge=lfs
+*.tga - binary filter=lfs diff=lfs merge=lfs
+*.dds - binary filter=lfs diff=lfs merge=lfs
+*.png - binary filter=lfs diff=lfs merge=lfs
+*.jpg - binary filter=lfs diff=lfs merge=lfs
+*.jpeg - binary filter=lfs diff=lfs merge=lfs
+*.psd - binary filter=lfs diff=lfs merge=lfs
+*.tif - binary filter=lfs diff=lfs merge=lfs
+*.tiff - binary filter=lfs diff=lfs merge=lfs
+*.iff - binary filter=lfs diff=lfs merge=lfs
+*.bmp - binary filter=lfs diff=lfs merge=lfs
+*.exr - binary filter=lfs diff=lfs merge=lfs
+*.hdr - binary filter=lfs diff=lfs merge=lfs
+*.wav - binary filter=lfs diff=lfs merge=lfs
+*.mp3 - binary filter=lfs diff=lfs merge=lfs
+*.ogg - binary filter=lfs diff=lfs merge=lfs
+*.aif - binary filter=lfs diff=lfs merge=lfs
+*.aiff - binary filter=lfs diff=lfs merge=lfs
+*.flac - binary filter=lfs diff=lfs merge=lfs
+*.mp4 - binary filter=lfs diff=lfs merge=lfs
+*.mov - binary filter=lfs diff=lfs merge=lfs
+*.zip - binary filter=lfs diff=lfs merge=lfs
+*.rar - binary filter=lfs diff=lfs merge=lfs
+*.7z - binary filter=lfs diff=lfs merge=lfs
+*.exe - binary filter=lfs diff=lfs merge=lfs
+*.dll - binary filter=lfs diff=lfs merge=lfs
+*.obj - binary filter=lfs diff=lfs merge=lfs
+*.gltf - text filter=lfs diff=lfs merge=lfs
+*.glb - binary filter=lfs diff=lfs merge=lfs
+*.vmf - text filter=lfs diff=lfs merge=lfs
+*.vtf - binary filter=lfs diff=lfs merge=lfs
+*.vmt - text filter=lfs diff=lfs merge=lfs

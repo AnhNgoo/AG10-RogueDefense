@@ -1,0 +1,23 @@
+Assets/
+├── _Data/                  <-- Thư mục gốc chứa tài nguyên tự làm
+│   ├── _Scenes/            <-- Chứa Scene Main, Menu
+│   ├── Animations/         <-- Controller và Animation Clips (KayKit)
+│   ├── Art/                <-- Chứa Models, Materials, Textures
+│   │   ├── Characters/     (KayKit Adventure Pack)
+│   │   ├── Environment/    (Các block đường đi, cây cối)
+│   │   └── VFX/            (Chứa Shader Graph, Particle - Lab 5)
+│   ├── Audio/              <-- Nhạc nền, tiếng súng
+│   ├── Prefabs/            <-- Cực kỳ quan trọng
+│   │   ├── Enemies/        (Prefab Quái đã gắn script)
+│   │   ├── Towers/         (Prefab Tháp)
+│   │   ├── MapSegments/    (Các mảnh đường đi để sinh map)
+│   │   ├── Projectiles/    (Đạn - dùng cho Pooling)
+│   │   └── UI/             (Các menu, thanh máu)
+│   ├── Resources/          <-- (Tùy chọn) Để load dữ liệu động
+│   ├── ScriptableObjects/  <-- Chứa chỉ số Tháp, Quái (Dùng Odin để sửa)
+│   └── Scripts/            <-- Code C#
+│       ├── Core/           (GameManager, PoolManager, EventManager)
+│       ├── Environment/    (MapGenerator - Lab 6)
+│       ├── Towers/         (Cơ chế bắn)
+│       ├── Enemies/        (AI di chuyển - Lab 4)
+│       └── UI/
