@@ -2,11 +2,11 @@ using UnityEngine;
 using System.Collections.Generic;
 
 /// <summary>
-/// Enemy AI Prototype sử dụng Waypoint-based Movement (không dùng Physics).
-/// Di chuyển qua danh sách waypoints bằng Vector3.MoveTowards (tối ưu performance).
-/// FSM đơn giản: Spawning -> Moving -> ReachedBase -> Dead.
+/// BASE CLASS: Enemy cơ bản với FSM và Waypoint Movement.
+/// Open/Closed Principle: Open for extension (kế thừa), Closed for modification (không sửa core logic).
+/// OBJECT POOLING: Implement IPoolable để tái sử dụng thay vì Destroy.
 /// </summary>
-public class EnemyAI_Prototype : MonoBehaviour
+public abstract class EnemyBase : MonoBehaviour, IPoolable
 {
     #region State Machine
 
@@ -18,7 +18,7 @@ public class EnemyAI_Prototype : MonoBehaviour
         Dead            // Đã chết (bị bắn hoặc đã damage xong)
     }
 
-    private EnemyState currentState = EnemyState.Spawning;
+    protected EnemyState currentState = EnemyState.Spawning;
 
     #endregion
 
@@ -33,23 +33,28 @@ public class EnemyAI_Prototype : MonoBehaviour
 
     #endregion
 
-    #region Private Fields
+    #region Protected Fields
 
-    private List<Vector3> pathWaypoints = new List<Vector3>();
-    private int currentWaypointIndex = 0;
+    protected List<Vector3> pathWaypoints = new List<Vector3>();
+    protected int currentWaypointIndex = 0;
+
+    [Header("Pooling")]
+    [Tooltip("Loại Pool (PHẢI khớp với PoolType trong PoolData)")]
+    public PoolType enemyType = PoolType.EnemyBasic;
 
     #endregion
 
-    #region Setup
+    #region Setup & Lifecycle
 
     /// <summary>
     /// Khởi tạo Enemy với đường đi (gọi từ bên ngoài khi spawn).
+    /// TEMPLATE METHOD: Gọi các hook methods cho subclass override.
     /// </summary>
-    public void Setup(List<Vector3> path)
+    public virtual void Setup(List<Vector3> path)
     {
         if (path == null || path.Count == 0)
         {
-            Debug.LogError("[EnemyAI] Setup failed: Path is null or empty!");
+            Debug.LogError($"[{GetType().Name}] Setup failed: Path is null or empty!");
             Destroy(gameObject);
             return;
         }
@@ -61,14 +66,21 @@ public class EnemyAI_Prototype : MonoBehaviour
         // Đặt Enemy tại điểm đầu tiên
         transform.position = pathWaypoints[0];
 
-        Debug.Log($"[EnemyAI] Setup complete. Total waypoints: {pathWaypoints.Count}");
+        // QUAN TRỌNG: Random tốc độ để tránh chồng chéo khi nhiều enemy cùng đường
+        moveSpeed *= Random.Range(0.8f, 1.2f);
+
+        // Hook: Cho subclass custom logic khi spawn
+        OnSpawnComplete();
+
+        Debug.Log($"[{GetType().Name}] Setup complete. Total waypoints: {pathWaypoints.Count}, Speed: {moveSpeed:F2}");
     }
 
-    #endregion
+    /// <summary>
+    /// Hook Method: Override để thực hiện logic custom khi enemy vừa spawn xong.
+    /// </summary>
+    protected virtual void OnSpawnComplete() { }
 
-    #region Unity Lifecycle
-
-    private void Update()
+    protected virtual void Update()
     {
         switch (currentState)
         {
@@ -97,7 +109,7 @@ public class EnemyAI_Prototype : MonoBehaviour
     /// <summary>
     /// Di chuyển Enemy theo waypoints bằng Interpolation (không dùng Physics).
     /// </summary>
-    private void UpdateMovement()
+    protected virtual void UpdateMovement()
     {
         if (currentWaypointIndex >= pathWaypoints.Count)
         {
@@ -132,31 +144,97 @@ public class EnemyAI_Prototype : MonoBehaviour
 
             if (currentWaypointIndex < pathWaypoints.Count)
             {
-                Debug.Log($"[EnemyAI] Reached waypoint {currentWaypointIndex}/{pathWaypoints.Count}");
+                OnReachWaypoint(currentWaypointIndex);
             }
         }
     }
 
     /// <summary>
-    /// Xử lý khi Enemy đến Home Base.
+    /// Hook Method: Override để xử lý khi đến waypoint.
     /// </summary>
-    private void HandleReachedBase()
-    {
-        Debug.Log("[EnemyAI] Reached Home Base! Dealing damage...");
+    protected virtual void OnReachWaypoint(int waypointIndex) { }
 
+    /// <summary>
+    /// Xử lý khi Enemy đến Home Base.
+    /// TEMPLATE METHOD: Gọi hook OnReachBase() cho subclass.
+    /// </summary>
+    protected virtual void HandleReachedBase()
+    {
+        Debug.Log($"[{GetType().Name}] Reached Home Base! Dealing damage...");
+
+        // Hook: Cho subclass xử lý damage logic
+        OnReachBase();
+
+        // Chuyển sang trạng thái Dead và RETURN TO POOL (không Destroy)
+        currentState = EnemyState.Dead;
+        ObjectPoolManager.Instance.ReturnToPool(gameObject);
+    }
+
+    /// <summary>
+    /// Hook Method: Override để xử lý logic khi enemy đến Base.
+    /// </summary>
+    protected virtual void OnReachBase()
+    {
         // TODO: Gọi GameManager để trừ máu Player
         // GameManager.Instance.TakeDamage(damageAmount);
+    }
 
-        // Chuyển sang trạng thái Dead và hủy object
+    #endregion
+
+    #region IPoolable Implementation
+
+    /// <summary>
+    /// PoolType property - Bắt buộc phải implement từ IPoolable.
+    /// Dùng để ObjectPoolManager biết trả về đúng pool.
+    /// </summary>
+    public PoolType PoolType => enemyType;
+
+    /// <summary>
+    /// Gọi khi object được lấy ra từ Pool.
+    /// Reset trạng thái về như mới (máu đầy, vận tốc = 0, etc.)
+    /// </summary>
+    public virtual void OnSpawnFromPool()
+    {
+        // Reset FSM state
+        currentState = EnemyState.Spawning;
+        currentWaypointIndex = 0;
+        pathWaypoints.Clear();
+
+        // Reset tốc độ về mặc định
+        moveSpeed = 3f;
+
+        // TODO: Reset máu khi có health system
+        // health = maxHealth;
+
+        Debug.Log($"[{GetType().Name}] ✓ Spawned from pool (Type: {enemyType}).");
+    }
+
+    /// <summary>
+    /// Gọi khi object được trả về Pool.
+    /// Cleanup resources (stop Coroutines, detach từ parent, etc.)
+    /// </summary>
+    public virtual void OnReturnToPool()
+    {
+        // Stop tất cả Coroutines (nếu có)
+        StopAllCoroutines();
+
+        // Reset state
         currentState = EnemyState.Dead;
-        Destroy(gameObject, 0.5f); // Delay 0.5s để có thể play animation/effect
+        pathWaypoints.Clear();
+        currentWaypointIndex = 0;
+
+        // Reset position về gốc (tránh object bay ra ngoài map)
+        transform.position = Vector3.zero;
+        transform.rotation = Quaternion.identity;
+
+        Debug.Log($"[{GetType().Name}] ✓ Returned to pool (Type: {enemyType}).");
     }
 
     #endregion
 
     #region Debug Visualization
 
-    private void OnDrawGizmos()
+    protected virtual void OnDrawGizmos()
     {
         if (pathWaypoints == null || pathWaypoints.Count == 0) return;
 

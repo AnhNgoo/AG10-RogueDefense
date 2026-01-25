@@ -34,3 +34,5 @@ MonoBehaviour:
     type: 3}
   homeBasePrefab: {fileID: 1658952043566594, guid: 72b5f3ccc49ab5c4fa326915f1aabbd8,
     type: 3}
+  enemyTesterPrefab: {fileID: 3726438337959669426, guid: b136a3653fabfc14083683c60a663fcc,
+    type: 3}

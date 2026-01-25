@@ -7,6 +7,7 @@ using Sirenix.OdinInspector;
 /// ORCHESTRATOR: Điều phối Map Generation và Visualization.
 /// Vai trò: Quản lý state, gọi MapGenerator để sinh dữ liệu, gọi MapVisualizer để hiển thị.
 /// Không chứa logic tính toán map (đã tách sang MapGenerator) hay logic render (đã tách sang MapVisualizer).
+/// SOLID: Tuân thủ Single Responsibility (chỉ orchestrate) và Dependency Inversion (inject services).
 /// </summary>
 public class WorldMapManager : SerializedMonoBehaviour
 {
@@ -44,14 +45,6 @@ public class WorldMapManager : SerializedMonoBehaviour
     [Tooltip("Hiển thị Gizmos trong Scene View")]
     public bool showGizmos = true;
 
-    [TabGroup("Tabs", "Settings"), BoxGroup("Tabs/Settings/Enemy Testing"), Required]
-    [Tooltip("Prefab Enemy để test (tạm thời)")]
-    public GameObject enemyPrefab;
-
-    [TabGroup("Tabs", "Settings"), BoxGroup("Tabs/Settings/Enemy Testing")]
-    [Tooltip("Bật để tự động spawn Enemy khi expand chunk")]
-    public bool autoSpawnEnemyOnExpand = true;
-
     [TabGroup("Tabs", "General"), BoxGroup("Tabs/General/Runtime Info"), ReadOnly, ShowInInspector]
     public int CurrentSeed => seed;
 
@@ -73,9 +66,11 @@ public class WorldMapManager : SerializedMonoBehaviour
     private List<ChunkData> hiddenChunks = new List<ChunkData>();
     private List<Vector2Int> visualizedCoords = new List<Vector2Int>();
 
-    // Dependencies (Injected)
+    // Dependencies (Injected - SOLID Dependency Inversion Principle)
     private MapGenerator mapGenerator;
     private MapVisualizer mapVisualizer;
+    private MapPathfinder mapPathfinder;
+    private EnemySpawner enemySpawner;
 
     #endregion
 
@@ -83,46 +78,7 @@ public class WorldMapManager : SerializedMonoBehaviour
 
     private void Start()
     {
-        // Tạo Enemy Prefab tạm thời nếu chưa gán
-        if (enemyPrefab == null)
-        {
-            CreateTemporaryEnemyPrefab();
-        }
-
         GenerateWorld();
-    }
-
-    /// <summary>
-    /// Tạo Enemy Prefab đơn giản (Cube đỏ) cho testing.
-    /// </summary>
-    private void CreateTemporaryEnemyPrefab()
-    {
-        GameObject tempEnemy = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        tempEnemy.name = "TempEnemyPrefab";
-        tempEnemy.transform.localScale = new Vector3(1f, 2f, 1f); // Hình người
-
-        // Đổi màu đỏ
-        Renderer renderer = tempEnemy.GetComponent<Renderer>();
-        if (renderer != null)
-        {
-            renderer.material.color = Color.red;
-        }
-
-        // Xóa collider mặc định, thêm CapsuleCollider (trigger)
-        Destroy(tempEnemy.GetComponent<BoxCollider>());
-        CapsuleCollider capsule = tempEnemy.AddComponent<CapsuleCollider>();
-        capsule.isTrigger = true;
-        capsule.height = 2f;
-        capsule.radius = 0.5f;
-
-        // Thêm EnemyAI_Prototype component
-        tempEnemy.AddComponent<EnemyAI_Prototype>();
-
-        // Chuyển thành Prefab runtime (không lưu vào Assets)
-        enemyPrefab = tempEnemy;
-        tempEnemy.SetActive(false); // Ẩn đi, chỉ dùng để Instantiate
-
-        Debug.Log("[WorldMapManager] Created temporary Enemy Prefab for testing.");
     }
 
     #endregion
@@ -138,7 +94,9 @@ public class WorldMapManager : SerializedMonoBehaviour
             return;
         }
 
-        // Khởi tạo Dependencies (Dependency Injection)
+        // ========================================
+        // DEPENDENCY INJECTION (SOLID Principle)
+        // ========================================
         mapGenerator = new MapGenerator(settings);
         mapVisualizer = new MapVisualizer(settings, transform);
 
@@ -157,6 +115,7 @@ public class WorldMapManager : SerializedMonoBehaviour
             if (debugSuccess)
             {
                 worldChunks = result;
+                InitializeDependencies(); // Khởi tạo Pathfinder và Spawner
                 InitializeVisualization();
                 Debug.Log($"[DEBUG MODE] Map generated with specific seed: {seed}. Total chunks: {worldChunks.Count}");
             }
@@ -196,6 +155,7 @@ public class WorldMapManager : SerializedMonoBehaviour
             else
             {
                 worldChunks = result;
+                InitializeDependencies(); // Khởi tạo Pathfinder và Spawner sau khi có worldChunks
                 InitializeVisualization();
                 Debug.Log($"✓ Map generated successfully with Seed: {seed} (Attempts: {attempts}, Chunks: {worldChunks.Count})");
             }
@@ -219,6 +179,7 @@ public class WorldMapManager : SerializedMonoBehaviour
                 if (fallbackSuccess)
                 {
                     worldChunks = result;
+                    InitializeDependencies();
                     InitializeVisualization();
                     Debug.LogWarning($"⚠ Generation failed, used FALLBACK seed: {fallbackSeed}. Chunks: {worldChunks.Count}");
                 }
@@ -259,8 +220,8 @@ public class WorldMapManager : SerializedMonoBehaviour
             // Duyệt qua các ExitPoint của chunk này
             foreach (var exitPoint in visChunk.exitPoints)
             {
-                // Tính hướng đi ra từ ExitPoint
-                Vector2Int direction = GetDirectionFromEdgeTile(exitPoint);
+                // Tính hướng đi ra từ ExitPoint (DELEGATION TO MAPPATHFINDER)
+                Vector2Int direction = mapPathfinder.GetDirectionFromEdgeTile(exitPoint);
 
                 // Tính tọa độ chunk hàng xóm
                 Vector2Int neighborCoord = visCoord + direction;
@@ -289,18 +250,40 @@ public class WorldMapManager : SerializedMonoBehaviour
         hiddenChunks.Remove(chunkToExpand);
         visualizedCoords.Add(chunkToExpand.chunkCoord);
 
-        // Hiển thị chunk này thông qua MapVisualizer
+        // Hiển thị chunk này thông qua MapVisualizer (DELEGATION)
         mapVisualizer.VisualizeChunk(chunkToExpand);
 
-        Debug.Log($"[WorldMapManager] Expanded chunk {chunkToExpand.chunkCoord}. Remaining hidden: {hiddenChunks.Count}");
+        // ========================================
+        // SẮP XẾP LẠI HIDDEN CHUNKS ĐỂ ƯU TIÊN NHÁNH ANH EM
+        // ========================================
+        // Chunk vừa mở có thể là ngã 3 -> Sắp xếp lại để các nhánh kế tiếp được mở ngay
+        hiddenChunks = hiddenChunks.OrderBy(c =>
+        {
+            // Ưu tiên: Chunks nối trực tiếp với visualized chunks (kế tiếp nhánh)
+            bool isDirectNeighbor = visualizedCoords.Any(visCoord =>
+            {
+                if (!worldChunks.TryGetValue(visCoord, out ChunkData visChunk)) return false;
+                foreach (var exit in visChunk.exitPoints)
+                {
+                    Vector2Int dir = mapPathfinder.GetDirectionFromEdgeTile(exit);
+                    if (visCoord + dir == c.chunkCoord) return true;
+                }
+                return false;
+            });
+
+            if (isDirectNeighbor) return 0; // Ưu tiên cao nhất
+            return Mathf.Abs(c.chunkCoord.x) + Mathf.Abs(c.chunkCoord.y); // Manhattan distance
+        }).ToList();
 
         // ========================================
-        // SPAWN ENEMY KHI EXPAND CHUNK
+        // SPAWN WAVE (DELEGATION TO ENEMYSPAWNER)
         // ========================================
-        if (autoSpawnEnemyOnExpand && enemyPrefab != null)
+        if (enemySpawner != null)
         {
-            SpawnEnemyAtChunk(chunkToExpand);
+            enemySpawner.StartNextWave(); // Delegation - Bắt đầu Wave mới
         }
+
+        Debug.Log($"[WorldMapManager] ✓ Expanded chunk {chunkToExpand.chunkCoord}. Remaining hidden: {hiddenChunks.Count}");
     }
 
     [TabGroup("Tabs", "General"), Button("Expand All Chunks", ButtonSizes.Medium), GUIColor(1f, 0.8f, 0.4f)]
@@ -315,7 +298,7 @@ public class WorldMapManager : SerializedMonoBehaviour
 
         int count = hiddenChunks.Count;
 
-        // Visualize tất cả chunks còn lại thông qua MapVisualizer
+        // Visualize tất cả chunks còn lại thông qua MapVisualizer (DELEGATION)
         foreach (var chunk in hiddenChunks)
         {
             mapVisualizer.VisualizeChunk(chunk);
@@ -323,7 +306,7 @@ public class WorldMapManager : SerializedMonoBehaviour
         }
 
         hiddenChunks.Clear();
-        Debug.Log($"[WorldMapManager] Expanded {count} chunks. All chunks now visible.");
+        Debug.Log($"[WorldMapManager] ✓ Expanded {count} chunks. All chunks now visible.");
     }
 
     #endregion
@@ -354,7 +337,25 @@ public class WorldMapManager : SerializedMonoBehaviour
             }
         }
 
-        Debug.Log($"[WorldMapManager] Base Chunk visualized. {hiddenChunks.Count} chunks hidden. Use 'Expand One Chunk' button to reveal.");
+        Debug.Log($"[WorldMapManager] ✓ Base Chunk visualized. {hiddenChunks.Count} chunks hidden. Use 'Expand One Chunk' button to reveal.");
+    }
+
+    /// <summary>
+    /// Khởi tạo các dependencies sau khi có worldChunks.
+    /// Dependency Injection: MapPathfinder và EnemySpawner nhận worldChunks.
+    /// </summary>
+    private void InitializeDependencies()
+    {
+        // Khởi tạo MapPathfinder với settings và worldChunks
+        mapPathfinder = new MapPathfinder(settings, worldChunks);
+
+        // Khởi tạo EnemySpawner (MonoBehaviour)
+        GameObject spawnerObj = new GameObject("EnemySpawner");
+        spawnerObj.transform.SetParent(transform);
+        enemySpawner = spawnerObj.AddComponent<EnemySpawner>();
+        enemySpawner.Initialize(mapPathfinder, worldChunks, visualizedCoords);
+
+        Debug.Log("[WorldMapManager] ✓ Dependencies initialized (MapPathfinder + EnemySpawner).");
     }
 
     /// <summary>
@@ -370,143 +371,6 @@ public class WorldMapManager : SerializedMonoBehaviour
         hiddenChunks.Clear();
         visualizedCoords.Clear();
         Debug.Log("[WorldMapManager] Cleared all visuals.");
-    }
-
-    /// <summary>
-    /// Tính hướng di chuyển từ chunk hiện tại dựa trên tọa độ ExitPoint.
-    /// </summary>
-    private Vector2Int GetDirectionFromEdgeTile(Vector2Int exitPoint)
-    {
-        // Exit ở cạnh trên (y = 8) -> Đi lên (Up)
-        if (exitPoint.y == 8) return Vector2Int.up;
-        // Exit ở cạnh dưới (y = 0) -> Đi xuống (Down)
-        if (exitPoint.y == 0) return Vector2Int.down;
-        // Exit ở cạnh phải (x = 8) -> Đi phải (Right)
-        if (exitPoint.x == 8) return Vector2Int.right;
-        // Exit ở cạnh trái (x = 0) -> Đi trái (Left)
-        if (exitPoint.x == 0) return Vector2Int.left;
-        return Vector2Int.zero; // Fallback (không nên xảy ra)
-    }
-
-    /// <summary>
-    /// Spawn Enemy tại EndPoint của chunk và tính đường đi về Home.
-    /// </summary>
-    private void SpawnEnemyAtChunk(ChunkData chunk)
-    {
-        // Tính path từ chunk này về Home (0,0)
-        List<Vector3> pathToHome = CalculatePathToHome(chunk);
-
-        if (pathToHome == null || pathToHome.Count == 0)
-        {
-            Debug.LogWarning($"[WorldMapManager] Cannot spawn Enemy: No path to Home from chunk {chunk.chunkCoord}");
-            return;
-        }
-
-        // Spawn Enemy tại điểm đầu tiên (EndPoint của chunk)
-        Vector3 spawnPosition = pathToHome[0] + Vector3.up * 0.5f; // Y+0.5 để nổi trên đất
-        GameObject enemyObj = Instantiate(enemyPrefab, spawnPosition, Quaternion.identity);
-        enemyObj.name = $"Enemy_Chunk_{chunk.chunkCoord.x}_{chunk.chunkCoord.y}";
-
-        // Setup Enemy với path
-        EnemyAI_Prototype enemyAI = enemyObj.GetComponent<EnemyAI_Prototype>();
-        if (enemyAI != null)
-        {
-            enemyAI.Setup(pathToHome);
-        }
-        else
-        {
-            Debug.LogError("[WorldMapManager] EnemyPrefab không có component EnemyAI_Prototype!");
-            Destroy(enemyObj);
-        }
-    }
-
-    /// <summary>
-    /// Tính đường đi từ chunk hiện tại về Home (0,0) bằng Backtracking.
-    /// Trả về List<Vector3> waypoints (world position).
-    /// </summary>
-    private List<Vector3> CalculatePathToHome(ChunkData startChunk)
-    {
-        List<Vector3> path = new List<Vector3>();
-
-        // Backtracking: Từ startChunk về (0,0)
-        Vector2Int currentCoord = startChunk.chunkCoord;
-        ChunkData currentChunk = startChunk;
-
-        // Lưu chunk đã thăm để tránh loop vô hạn
-        HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
-
-        while (currentCoord != Vector2Int.zero)
-        {
-            // Kiểm tra loop
-            if (visited.Contains(currentCoord))
-            {
-                Debug.LogError($"[WorldMapManager] Path calculation loop detected at {currentCoord}!");
-                return null;
-            }
-            visited.Add(currentCoord);
-
-            // Thêm waypoint: Center của chunk hiện tại
-            Vector3 centerWorldPos = TileToWorldPosition(currentCoord, new Vector2Int(4, 4));
-            path.Add(centerWorldPos);
-
-            // Thêm waypoint: EntryPoint của chunk hiện tại (điểm vào chunk này)
-            Vector3 entryWorldPos = TileToWorldPosition(currentCoord, currentChunk.entryPoint);
-            path.Add(entryWorldPos);
-
-            // Tìm chunk cha (chunk mà currentChunk nối với qua EntryPoint)
-            Vector2Int direction = GetDirectionFromEdgeTile(currentChunk.entryPoint);
-            Vector2Int parentCoord = currentCoord - direction; // Ngược lại hướng entry
-
-            // Kiểm tra chunk cha có tồn tại không
-            if (!worldChunks.TryGetValue(parentCoord, out ChunkData parentChunk))
-            {
-                Debug.LogError($"[WorldMapManager] Path calculation failed: Parent chunk {parentCoord} not found!");
-                return null;
-            }
-
-            // Di chuyển đến chunk cha
-            currentCoord = parentCoord;
-            currentChunk = parentChunk;
-
-            // Giới hạn số bước để tránh vòng lặp vô hạn
-            if (visited.Count > 500)
-            {
-                Debug.LogError("[WorldMapManager] Path calculation exceeded 500 steps! Breaking.");
-                return null;
-            }
-        }
-
-        // Đã về đến Home (0,0) -> Thêm điểm cuối (Center của Home)
-        Vector3 homeCenter = TileToWorldPosition(Vector2Int.zero, new Vector2Int(4, 4));
-        path.Add(homeCenter);
-
-        // QUAN TRỌNG: Reverse path vì ta tính ngược từ ngọn về gốc
-        path.Reverse();
-
-        Debug.Log($"[WorldMapManager] Path calculated: {path.Count} waypoints from {startChunk.chunkCoord} to Home.");
-        return path;
-    }
-
-    /// <summary>
-    /// Chuyển đổi tọa độ Tile (chunk + tile index) sang World Position.
-    /// </summary>
-    private Vector3 TileToWorldPosition(Vector2Int chunkCoord, Vector2Int tileCoord)
-    {
-        // Tính world position của chunk
-        Vector3 chunkWorldPos = new Vector3(
-            chunkCoord.x * settings.ChunkWorldSize,
-            0,
-            chunkCoord.y * settings.ChunkWorldSize
-        );
-
-        // Tính offset của tile trong chunk
-        Vector3 tileOffset = new Vector3(
-            (tileCoord.x * settings.tileSize) - settings.CenterOffset,
-            0,
-            (tileCoord.y * settings.tileSize) - settings.CenterOffset
-        );
-
-        return chunkWorldPos + tileOffset;
     }
 
     #endregion
