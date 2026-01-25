@@ -388,7 +388,7 @@ GameObject:
   - component: {fileID: 1601296628}
   - component: {fileID: 1601296629}
   m_Layer: 0
-  m_Name: GameObject
+  m_Name: World Map Manager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

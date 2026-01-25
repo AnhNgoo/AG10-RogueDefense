@@ -41,6 +41,22 @@ public class MapGenerationSettings : SerializedScriptableObject
     [MinValue(10)]
     public int maxRetryAttempts = 100;
 
+    [BoxGroup("Prefabs"), Required]
+    [Tooltip("Prefab cho đường đi (Path)")]
+    public GameObject pathPrefab;
+
+    [BoxGroup("Prefabs"), Required]
+    [Tooltip("Prefab cho lớp đất nền (Dirt)")]
+    public GameObject dirtPrefab;
+
+    [BoxGroup("Prefabs"), Required]
+    [Tooltip("Prefab cho lớp cỏ phủ (Grass)")]
+    public GameObject grassPrefab;
+
+    [BoxGroup("Prefabs"), Required]
+    [Tooltip("Prefab cho nhà chính (Home Base 3x3)")]
+    public GameObject homeBasePrefab;
+
     [FoldoutGroup("Calculated Values (Read-Only)"), ReadOnly, ShowInInspector]
     public float ChunkWorldSize => chunkSize * tileSize;
 

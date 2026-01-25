@@ -17,7 +17,10 @@ Assets/
 │   ├── ScriptableObjects/  <-- Chứa chỉ số Tháp, Quái (Dùng Odin để sửa)
 │   └── Scripts/            <-- Code C#
 │       ├── Core/           (GameManager, PoolManager, EventManager)
-│       ├── Environment/    (MapGenerator - Lab 6)
+│       ├── Environment/   
+          |      └──   Map
+          |             ├── Data 
+          |             └── Setting
 │       ├── Towers/         (Cơ chế bắn)
 │       ├── Enemies/        (AI di chuyển - Lab 4)
 │       └── UI/
