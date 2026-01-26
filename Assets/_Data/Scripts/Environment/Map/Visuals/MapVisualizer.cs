@@ -194,7 +194,7 @@ public class MapVisualizer
         if (isBaseChunk && settings.homeBasePrefab != null)
         {
             // Tính vị trí tâm chunk (tile 4,4)
-            Vector3 homeCenterPos = chunkWorldPos; // Tâm chunk = (0, 0, 0) vì Base Chunk ở (0,0)
+            Vector3 homeCenterPos = chunkWorldPos + Vector3.up; // Tâm chunk = (0, 0, 0) vì Base Chunk ở (0,0)
 
             // Tính rotation dựa trên hướng exit
             Quaternion homeRotation = CalculateHomeRotation(chunk);

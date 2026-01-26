@@ -50,6 +50,9 @@ public class ObjectPoolManager : SerializedMonoBehaviour
         }
 
         _instance = this;
+
+        // Đảm bảo GameObject này là Root Object (tách khỏi parent nếu có)
+        transform.SetParent(null);
         DontDestroyOnLoad(gameObject);
     }
 
