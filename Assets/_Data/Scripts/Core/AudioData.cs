@@ -5,7 +5,6 @@ using Sirenix.OdinInspector;
 
 /// <summary>
 /// ScriptableObject chứa tất cả AudioClip trong game.
-/// Sử dụng Odin Inspector để hiển thị dạng Dictionary dễ quản lý.
 /// </summary>
 [CreateAssetMenu(fileName = "AudioData", menuName = "AG10/Audio Data", order = 0)]
 public class AudioData : ScriptableObject
@@ -49,7 +48,7 @@ public class AudioData : ScriptableObject
     private Dictionary<SoundType, SoundEntry> _soundCache;
 
     /// <summary>
-    /// Khởi tạo cache khi load ScriptableObject
+    /// Xây dựng cache khi enable.
     /// </summary>
     private void OnEnable()
     {
@@ -80,12 +79,10 @@ public class AudioData : ScriptableObject
                 _soundCache[entry.Type] = entry;
             }
         }
-
-        Debug.Log($"[AudioData] Đã build cache với {_soundCache.Count} sounds.");
     }
 
     /// <summary>
-    /// Lấy SoundEntry theo SoundType (để truy cập playlist)
+    /// Lấy SoundEntry theo SoundType.
     /// </summary>
     public SoundEntry GetEntry(SoundType type)
     {
@@ -105,7 +102,7 @@ public class AudioData : ScriptableObject
     }
 
     /// <summary>
-    /// Lấy AudioClip theo SoundType (lấy clip đầu tiên trong playlist)
+    /// Lấy AudioClip theo SoundType (trả về clip đầu tiên).
     /// </summary>
     public AudioClip GetClip(SoundType type)
     {
@@ -120,7 +117,7 @@ public class AudioData : ScriptableObject
     }
 
     /// <summary>
-    /// Lấy Volume của sound
+    /// Lấy Volume cho loại âm thanh.
     /// </summary>
     public float GetVolume(SoundType type)
     {

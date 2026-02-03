@@ -1,24 +1,20 @@
 /// <summary>
-/// INTERFACE: Các object muốn sử dụng Pooling phải implement interface này.
-/// Đảm bảo object được reset đúng cách khi spawn/despawn.
+/// Interface cho các object có thể được pooling.
 /// </summary>
 public interface IPoolable
 {
     /// <summary>
-    /// Loại Pool mà object này thuộc về.
-    /// Dùng để ObjectPoolManager biết trả về đúng pool.
+    /// Loại pool mà object này thuộc về.
     /// </summary>
     PoolType PoolType { get; }
 
     /// <summary>
-    /// Gọi khi object được spawn từ Pool.
-    /// Reset trạng thái về như mới (máu đầy, vận tốc = 0, etc.)
+    /// Được gọi khi object được spawn từ pool.
     /// </summary>
     void OnSpawnFromPool();
 
     /// <summary>
-    /// Gọi khi object được trả về Pool.
-    /// Cleanup resources (stop Coroutines, detach từ parent, etc.)
+    /// Được gọi khi object được trả về pool.
     /// </summary>
     void OnReturnToPool();
 }

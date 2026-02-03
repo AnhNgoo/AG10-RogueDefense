@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using Sirenix.OdinInspector;
 
 /// <summary>
-/// Dữ liệu của một Chunk 9x9 trong World Map.
-/// Chứa thông tin về tiles, entry point, exit points.
+/// Dữ liệu của một ô đất (Chunk).
+/// Chứa thông tin tọa độ, khoảng cách đến gốc, và các cổng kết nối.
 /// </summary>
 [System.Serializable]
 public class ChunkData

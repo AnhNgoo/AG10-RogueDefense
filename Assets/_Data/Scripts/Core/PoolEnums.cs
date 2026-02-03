@@ -1,6 +1,5 @@
 /// <summary>
-/// ENUM: Các loại Pool trong game.
-/// Mở rộng khi thêm loại object mới (Enemy, Bullet, VFX, etc.)
+/// Enum định nghĩa tất cả các loại Pool.
 /// </summary>
 public enum PoolType
 {

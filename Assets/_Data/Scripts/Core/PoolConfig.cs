@@ -3,13 +3,7 @@ using UnityEngine;
 using Sirenix.OdinInspector;
 
 /// <summary>
-/// SCRIPTABLE OBJECT: Cấu hình tổng hợp cho toàn bộ Object Pool trong game.
-/// Chứa List các PoolDataEntry (Enemy, Bullet, VFX, etc.)
-/// 
-/// WORKFLOW:
-/// 1. Tạo file này 1 lần: Right-click → Create → AG10 → Pool Config
-/// 2. Thêm các pool vào Table (Odin Inspector)
-/// 3. Kéo thả file này vào ObjectPoolManager trong Inspector
+/// ScriptableObject cấu hình cho tất cả Object Pools.
 /// </summary>
 [CreateAssetMenu(fileName = "PoolConfig", menuName = "AG10/Pool Config", order = 0)]
 public class PoolConfig : SerializedScriptableObject

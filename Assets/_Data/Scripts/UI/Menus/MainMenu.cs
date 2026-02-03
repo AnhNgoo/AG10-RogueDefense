@@ -103,7 +103,7 @@ public class MainMenu : MenuBase
             AudioManager.Instance.PlaySFX(SoundType.ButtonClick);
         }
 
-        Debug.Log("[MainMenu] Play Button Clicked");
+
 
         // Load Scene async bằng UniTask
         LoadGameSceneAsync().Forget();
@@ -120,7 +120,7 @@ public class MainMenu : MenuBase
             AudioManager.Instance.PlaySFX(SoundType.ButtonClick);
         }
 
-        Debug.Log("[MainMenu] Options Button Clicked");
+
 
         // Mở Settings Popup
         if (UIManager.Instance != null)
@@ -140,7 +140,7 @@ public class MainMenu : MenuBase
             AudioManager.Instance.PlaySFX(SoundType.ButtonClick);
         }
 
-        Debug.Log("[MainMenu] Quit Button Clicked");
+
 
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;

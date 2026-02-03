@@ -3,8 +3,8 @@ using UnityEngine;
 using Sirenix.OdinInspector;
 
 /// <summary>
-/// Database lưu trữ các Seed đã được kiểm chứng tạo ra map tốt.
-/// Dùng làm fallback khi random generation thất bại sau nhiều lần thử.
+/// Database chứa các Seed bản đồ đã kiểm duyệt (đảm bảo chơi được).
+/// Dùng làm fallback khi Random thất bại liên tục.
 /// </summary>
 [CreateAssetMenu(fileName = "MapSeedDatabase", menuName = "AG10/Map Seed Database")]
 public class MapSeedDatabase : SerializedScriptableObject

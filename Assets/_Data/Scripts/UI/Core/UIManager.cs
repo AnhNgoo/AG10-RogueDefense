@@ -409,7 +409,7 @@ public class UIManager : MonoBehaviour
     /// </summary>
     private IEnumerator SmoothResumeCoroutine(float duration)
     {
-        Debug.Log("[UIManager] Bắt đầu Smooth Resume...");
+        // Debug.Log("[UIManager] Bắt đầu Smooth Resume...");
 
         float timer = 0f;
 
@@ -428,7 +428,7 @@ public class UIManager : MonoBehaviour
         // Đảm bảo set cứng = 1 khi kết thúc (QUAN TRỌNG)
         Time.timeScale = 1f;
 
-        Debug.Log("[UIManager] Smooth Resume hoàn tất (Time.timeScale = 1)");
+        // Debug.Log("[UIManager] Smooth Resume hoàn tất (Time.timeScale = 1)");
 
         _resumeCoroutine = null;
     }

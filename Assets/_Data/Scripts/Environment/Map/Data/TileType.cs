@@ -1,6 +1,5 @@
 /// <summary>
-/// Các loại Tile trong map.
-/// Ground: Đất trống, Path: Đường đi, Home: Nhà chính, StartPoint: Điểm bắt đầu, EndPoint: Điểm kết thúc.
+/// Enum loại ô đất (Hiện tại chỉ có Ground và Path).
 /// </summary>
 public enum TileType
 {

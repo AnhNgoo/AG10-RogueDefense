@@ -1,6 +1,5 @@
 /// <summary>
-/// Định nghĩa tập trung các Event Names trong game
-/// Sử dụng const string để tránh typo và dễ bảo trì
+/// Định nghĩa các tên event dùng trong game.
 /// </summary>
 public static class GameEvents
 {

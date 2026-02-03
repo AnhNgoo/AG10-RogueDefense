@@ -1,5 +1,5 @@
 /// <summary>
-/// Enum định nghĩa các loại âm thanh trong game
+/// Enum định nghĩa tất cả các loại âm thanh.
 /// </summary>
 public enum SoundType
 {

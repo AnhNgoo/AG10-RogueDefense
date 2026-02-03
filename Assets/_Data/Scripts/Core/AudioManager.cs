@@ -3,10 +3,8 @@ using Sirenix.OdinInspector;
 using System.Collections;
 
 /// <summary>
-/// Singleton Manager quản lý toàn bộ Audio trong game.
-/// DontDestroyOnLoad để tồn tại xuyên suốt các Scene.
-/// Hỗ trợ Playlist tự động chuyển bài.
-/// Lưu Volume vào PlayerPrefs.
+/// Singleton Manager xử lý toàn bộ âm thanh trong game.
+/// Tồn tại qua các scene.
 /// </summary>
 public class AudioManager : MonoBehaviour
 {
@@ -105,7 +103,7 @@ public class AudioManager : MonoBehaviour
     #region Initialization
 
     /// <summary>
-    /// Khởi tạo AudioSources và load settings từ PlayerPrefs
+    /// Khởi tạo AudioSources và tải cài đặt từ PlayerPrefs.
     /// </summary>
     private void Initialize()
     {
@@ -139,8 +137,7 @@ public class AudioManager : MonoBehaviour
     #region Public API - Music
 
     /// <summary>
-    /// Phát nhạc nền với Playlist Support
-    /// LOGIC THÔNG MINH: Nếu đang phát cùng loại nhạc thì KHÔNG reset
+    /// Phát nhạc nền có hỗ trợ playlist.
     /// </summary>
     public void PlayMusic(SoundType type, bool forceRestart = false)
     {
@@ -153,7 +150,7 @@ public class AudioManager : MonoBehaviour
         // KIỂM TRA TRÙNG NHẠC: Nếu đang phát cùng type và không force restart -> bỏ qua
         if (_currentMusicType == type && !forceRestart)
         {
-            Debug.Log($"[AudioManager] Đã phát {type} rồi, bỏ qua để tránh reset nhạc.");
+            // Loại nhạc này đang phát rồi, bỏ qua.
             return;
         }
 
@@ -162,7 +159,6 @@ public class AudioManager : MonoBehaviour
         {
             StopCoroutine(_fadeCoroutine);
             _fadeCoroutine = null;
-            Debug.Log("[AudioManager] Đã hủy FadeOut đang chạy để phát nhạc mới.");
         }
 
         // Reset volume về mức cài đặt (vì fade out có thể đã giảm volume)
@@ -189,8 +185,6 @@ public class AudioManager : MonoBehaviour
 
         // Bắt đầu phát playlist
         _playlistCoroutine = StartCoroutine(PlaylistCoroutine());
-
-        Debug.Log($"[AudioManager] Bắt đầu playlist: {type} ({entry.Clips.Count} tracks)");
     }
 
     /// <summary>
@@ -225,7 +219,6 @@ public class AudioManager : MonoBehaviour
             // Phát nhạc
             _musicSource.clip = clip;
             _musicSource.Play();
-            Debug.Log($"[AudioManager] Playing track {_currentTrackIndex + 1}/{_currentPlaylist.Clips.Count}: {clip.name}");
 
             // Chờ cho đến khi bài hát kết thúc
             yield return new WaitWhile(() => _musicSource.isPlaying);
@@ -242,7 +235,7 @@ public class AudioManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Dừng nhạc nền (KHÔNG fade)
+    /// Dừng nhạc nền ngay lập tức (không fade).
     /// </summary>
     public void StopMusic()
     {
@@ -264,11 +257,11 @@ public class AudioManager : MonoBehaviour
         _currentMusicType = SoundType.None;
         _currentPlaylist = null;
 
-        Debug.Log("[AudioManager] Stopped music.");
+        _currentPlaylist = null;
     }
 
     /// <summary>
-    /// Fade Out và dừng nhạc
+    /// Fade out và dừng nhạc.
     /// </summary>
     public void FadeOutAndStop()
     {
@@ -302,7 +295,7 @@ public class AudioManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Set âm lượng Music và lưu vào PlayerPrefs
+    /// Đặt âm lượng nhạc và lưu vào PlayerPrefs.
     /// </summary>
     public void SetMusicVolume(float volume)
     {
@@ -325,7 +318,7 @@ public class AudioManager : MonoBehaviour
     #region Public API - SFX
 
     /// <summary>
-    /// Phát SFX (One Shot) - Random nếu có nhiều clip
+    /// Phát một SFX (One Shot).
     /// </summary>
     public void PlaySFX(SoundType type)
     {
@@ -353,7 +346,7 @@ public class AudioManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Set âm lượng SFX và lưu vào PlayerPrefs
+    /// Đặt âm lượng SFX và lưu vào PlayerPrefs.
     /// </summary>
     public void SetSFXVolume(float volume)
     {

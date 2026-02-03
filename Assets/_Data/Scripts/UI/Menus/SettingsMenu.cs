@@ -288,7 +288,7 @@ public class SettingsMenu : MenuBase
             AudioManager.Instance.PlaySFX(SoundType.ButtonClick);
         }
 
-        Debug.Log("[SettingsMenu] Close Button Clicked");
+
 
         // Gọi Close() sẽ trigger logic Resume và đóng menu
         Close();

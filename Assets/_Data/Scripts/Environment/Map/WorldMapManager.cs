@@ -329,6 +329,7 @@ public class WorldMapManager : SerializedMonoBehaviour
         }
 
         // Tất cả chunks còn lại đưa vào hidden list
+        // Tất cả chunks còn lại đưa vào hidden list
         foreach (var chunk in worldChunks.Values)
         {
             if (chunk.chunkCoord != Vector2Int.zero)

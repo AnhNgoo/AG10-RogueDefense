@@ -11,8 +11,7 @@ public class EnemyTester : EnemyBase
     protected override void OnSpawnComplete()
     {
         base.OnSpawnComplete();
-        // Custom logic khi spawn (nếu cần)
-        Debug.Log("[EnemyTester] Spawned successfully!");
+        // Custom logic cho Tester
     }
 
     protected override void OnReachWaypoint(int waypointIndex)
@@ -24,7 +23,7 @@ public class EnemyTester : EnemyBase
     protected override void OnReachBase()
     {
         base.OnReachBase();
-        Debug.Log("[EnemyTester] Dealing test damage to base!");
+        // Logic khi đi hết đường
         // TODO: Thực tế sẽ gọi GameManager.TakeDamage()
     }
 

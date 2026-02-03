@@ -3,7 +3,7 @@ using UnityEngine;
 using System.Linq;
 
 /// <summary>
-/// Pure Logic class chịu trách nhiệm sinh dữ liệu map (không có visualization logic).
+/// Lớp Logic thuần chịu trách nhiệm sinh dữ liệu bản đồ (không có logic hiển thị).
 /// Nhận MapGenerationSettings làm đầu vào, trả về Dictionary<Vector2Int, ChunkData>.
 /// </summary>
 public class MapGenerator
@@ -23,13 +23,14 @@ public class MapGenerator
         Dictionary<Vector2Int, ChunkData> worldChunks = new Dictionary<Vector2Int, ChunkData>();
 
         // ========================================
-        // PHASE 1: HARDCODED CROSS INITIALIZATION
+        // ========================================
+        // GIAI ĐOẠN 1: KHỞI TẠO HÌNH CHỮ THẬP CỨNG
         // ========================================
 
-        // Step 1.1: Create Base Chunk (0,0)
+        // Bước 1.1: Tạo Chunk Gốc (0,0)
         ChunkData baseChunk = new ChunkData(Vector2Int.zero);
 
-        // Draw Home 3x3
+        // Vẽ Nhà Chính 3x3
         for (int x = 3; x <= 5; x++)
         {
             for (int z = 3; z <= 5; z++)
@@ -43,108 +44,108 @@ public class MapGenerator
 
         worldChunks.Add(Vector2Int.zero, baseChunk);
 
-        // Step 1.2: Create ONLY 1 random neighbor (single exit from home)
+        // Bước 1.2: Tạo CHỈ 1 hàng xóm ngẫu nhiên (lối ra duy nhất từ nhà)
         Vector2Int[] allDirections = { Vector2Int.up, Vector2Int.right, Vector2Int.down, Vector2Int.left };
         Queue<ChunkData> queue = new Queue<ChunkData>();
 
-        // Pick ONE random direction for the home exit
+        // Chọn MỘT hướng ngẫu nhiên cho lối ra
         Vector2Int chosenDir = allDirections[Random.Range(0, allDirections.Length)];
 
-        // Calculate neighbor coordinate
+        // Tính tọa độ hàng xóm
         Vector2Int neighborCoord = Vector2Int.zero + chosenDir;
 
-        // Create the single neighbor chunk
+        // Tạo chunk hàng xóm duy nhất
         ChunkData firstNeighbor = new ChunkData(neighborCoord);
 
-        // Setup connections between Base and this single Neighbor
+        // Thiết lập kết nối giữa Gốc và Hàng xóm duy nhất này
         Vector2Int exitFromBase = GetCenterEdgeTile(chosenDir);
         Vector2Int entryToNeighbor = GetCenterEdgeTile(-chosenDir);
 
-        // Base Chunk: Add ONLY ONE exit
+        // Chunk Gốc: Thêm CHỈ MỘT lối ra
         baseChunk.exitPoints.Add(exitFromBase);
 
-        // Neighbor: Set entry pointing back to Base
+        // Hàng xóm: Đặt lối vào trỏ ngược lại Gốc
         firstNeighbor.entryPoint = entryToNeighbor;
 
-        // Add neighbor to world
+        // Thêm hàng xóm vào thế giới
         worldChunks.Add(neighborCoord, firstNeighbor);
 
-        // Enqueue the single neighbor to start expansion
+        // Thêm hàng xóm duy nhất vào hàng đợi để bắt đầu mở rộng
         queue.Enqueue(firstNeighbor);
 
         // ========================================
-        // PHASE 2: BFS WORLD FILLING
+        // GIAI ĐOẠN 2: LẤP ĐẦY THẾ GIỚI (BFS)
         // ========================================
 
         while (queue.Count > 0)
         {
             ChunkData currentChunk = queue.Dequeue();
 
-            // Find all valid expansion directions
+            // Tìm tất cả các hướng mở rộng hợp lệ
             List<Vector2Int> validDirections = new List<Vector2Int>();
 
             foreach (var dir in allDirections)
             {
                 Vector2Int nextCoord = currentChunk.chunkCoord + dir;
 
-                // Check boundaries
+                // Kiểm tra biên
                 if (nextCoord.x < settings.minCoord || nextCoord.x > settings.maxCoord ||
                     nextCoord.y < settings.minCoord || nextCoord.y > settings.maxCoord)
                     continue;
 
-                // Check if already exists
+                // Kiểm tra đã tồn tại chưa
                 if (worldChunks.ContainsKey(nextCoord))
                     continue;
 
                 validDirections.Add(dir);
             }
 
-            // SMART SNAKE STRATEGY: Always try to continue, bend when blocked
+            // CHIẾN THUẬT RẮN THÔNG MINH: Luôn cố gắng đi tiếp, uốn cong khi bị chặn
             List<Vector2Int> selectedDirections = new List<Vector2Int>();
 
             if (validDirections.Count > 0)
             {
-                // Step 1: Calculate "forward" direction (based on entry direction)
+                // Bước 1: Tính hướng "tiến" (dựa trên hướng vào)
                 Vector2Int forwardDir = GetForwardDirection(currentChunk.entryPoint);
 
-                // Step 2: Select PRIMARY direction (main path continuation)
+                // Bước 2: Chọn hướng CHÍNH (tiếp tục đường đi chính)
                 Vector2Int primaryDir;
 
                 if (validDirections.Contains(forwardDir))
                 {
-                    // Prefer going straight (snake continues forward)
+                    // Ưu tiên đi thẳng (rắn đi tiếp)
                     primaryDir = forwardDir;
                 }
                 else
                 {
-                    // Forward blocked - MUST choose another direction (snake bends)
-                    // Shuffle and pick first to ensure randomness
+                    // Bị chặn phía trước - PHẢI chọn hướng khác (rắn uốn cong)
+                    // Xáo trộn và chọn cái đầu tiên để đảm bảo ngẫu nhiên
                     primaryDir = validDirections.OrderBy(x => Random.value).First();
                 }
 
                 selectedDirections.Add(primaryDir);
 
-                // Step 3: Consider BRANCHING (secondary path)
-                // Remove primary from valid list
+                // Bước 3: Cân nhắc RẼ NHÁNH (đường phụ)
+                // Loại bỏ hướng chính khỏi danh sách hợp lệ
                 List<Vector2Int> remainingDirections = validDirections.Where(d => d != primaryDir).ToList();
 
                 if (remainingDirections.Count > 0 && Random.value < settings.branchRate)
                 {
-                    // Create branch with low probability
+                    // Tạo nhánh với xác suất thấp
                     Vector2Int branchDir = remainingDirections.OrderBy(x => Random.value).First();
                     selectedDirections.Add(branchDir);
                 }
 
-                // Guarantee: Never exceed 2 directions (T-shape max)
+                // Đảm bảo: Không bao giờ quá 2 hướng (Tối đa hình chữ T)
             }
 
-            // Create chunks in selected directions
+            // Tạo chunk theo các hướng đã chọn
             foreach (var dir in selectedDirections)
             {
                 Vector2Int newCoord = currentChunk.chunkCoord + dir;
                 ChunkData newChunk = new ChunkData(newCoord);
 
-                // Setup connections
+                // Thiết lập kết nối
                 Vector2Int exitFromCurrent = GetCenterEdgeTile(dir);
                 Vector2Int entryToNew = GetCenterEdgeTile(-dir);
 
@@ -157,23 +158,23 @@ public class MapGenerator
         }
 
         // ========================================
-        // PHASE 3: POST-PROCESSING & PATH DRAWING
+        // GIAI ĐOẠN 3: HẬU XỬ LÝ & VẼ ĐƯỜNG
         // ========================================
 
         foreach (var chunk in worldChunks.Values)
         {
-            // Fix dead ends: Create fake exit opposite to entry
+            // Sửa ngõ cụt: Tạo lối ra giả đối diện với lối vào
             if (chunk.chunkCoord != Vector2Int.zero && chunk.exitPoints.Count == 0)
             {
                 Vector2Int fakeExit = GetOppositeEdge(chunk.entryPoint);
                 chunk.exitPoints.Add(fakeExit);
             }
 
-            // Draw paths on tiles
+            // Vẽ đường đi trên các ô
             GenerateStarPath(chunk);
         }
 
-        // Check if map meets quality requirements
+        // Kiểm tra xem bản đồ có đạt yêu cầu chất lượng không
         bool success = worldChunks.Count >= settings.minChunks;
 
         return success ? worldChunks : null;
@@ -188,21 +189,21 @@ public class MapGenerator
     {
         Vector2Int center = new Vector2Int(4, 4);
 
-        // Entry -> Center (skip for base chunk which starts at center)
+        // Lối vào -> Tâm (bỏ qua cho chunk gốc bắt đầu tại tâm)
         if (chunk.chunkCoord != Vector2Int.zero)
         {
             chunk.tiles[chunk.entryPoint.x, chunk.entryPoint.y] = TileType.StartPoint;
             DrawStraightLine(chunk, chunk.entryPoint, center);
         }
 
-        // Center -> All Exits
+        // Tâm -> Tất cả lối ra
         foreach (var exit in chunk.exitPoints)
         {
             DrawStraightLine(chunk, center, exit);
             chunk.tiles[exit.x, exit.y] = TileType.EndPoint;
         }
 
-        // Ensure center is marked as path
+        // Đảm bảo tâm được đánh dấu là đường đi
         if (chunk.tiles[4, 4] == TileType.Ground)
             chunk.tiles[4, 4] = TileType.Path;
     }
@@ -215,14 +216,14 @@ public class MapGenerator
         Vector2Int current = from;
         SetPathTile(chunk, current);
 
-        // Move along X axis first
+        // Di chuyển theo trục X trước
         while (current.x != to.x)
         {
             current.x += (int)Mathf.Sign(to.x - current.x);
             SetPathTile(chunk, current);
         }
 
-        // Then move along Y axis
+        // Sau đó di chuyển theo trục Y
         while (current.y != to.y)
         {
             current.y += (int)Mathf.Sign(to.y - current.y);
@@ -235,7 +236,7 @@ public class MapGenerator
     /// </summary>
     private void SetPathTile(ChunkData chunk, Vector2Int pos)
     {
-        // Allow path to overwrite Ground and Home (for paths through home base)
+        // Cho phép đường đi đè lên Đất và Nhà (để đi qua căn cứ)
         TileType current = chunk.tiles[pos.x, pos.y];
         if (current == TileType.Ground || current == TileType.Home)
             chunk.tiles[pos.x, pos.y] = TileType.Path;
@@ -262,7 +263,7 @@ public class MapGenerator
     /// </summary>
     private Vector2Int GetOppositeEdge(Vector2Int entry)
     {
-        // Find edge opposite to entry point
+        // Tìm cạnh đối diện với điểm vào
         if (entry.y == 0) return new Vector2Int(4, 8); // Bottom -> Top
         if (entry.y == 8) return new Vector2Int(4, 0); // Top -> Bottom
         if (entry.x == 0) return new Vector2Int(8, 4); // Left -> Right
@@ -275,7 +276,7 @@ public class MapGenerator
     /// </summary>
     private Vector2Int GetForwardDirection(Vector2Int entryPoint)
     {
-        // Entry at bottom -> Forward is UP
+        // Lối vào ở dưới -> Hướng tới là LÊN
         if (entryPoint.y == 0) return Vector2Int.up;
         if (entryPoint.y == 8) return Vector2Int.down;
         if (entryPoint.x == 0) return Vector2Int.right;

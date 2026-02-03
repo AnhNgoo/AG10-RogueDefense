@@ -79,7 +79,7 @@ public class InGameHUD : MenuBase
             AudioManager.Instance.PlaySFX(SoundType.ButtonClick);
         }
 
-        Debug.Log("[InGameHUD] Pause Button Clicked");
+
 
         // Mở Settings Popup
         if (UIManager.Instance != null)

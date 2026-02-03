@@ -1,10 +1,12 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Sirenix.OdinInspector;
 
 /// <summary>
 /// BASE CLASS: Enemy cơ bản với FSM và Waypoint Movement.
 /// Open/Closed Principle: Open for extension (kế thừa), Closed for modification (không sửa core logic).
 /// OBJECT POOLING: Implement IPoolable để tái sử dụng thay vì Destroy.
+/// Refactored with Odin Inspector for better Visualization.
 /// </summary>
 public abstract class EnemyBase : MonoBehaviour, IPoolable
 {
@@ -15,39 +17,53 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
         Spawning,       // Vừa spawn, chuẩn bị di chuyển
         Moving,         // Đang di chuyển theo waypoints
         ReachedBase,    // Đã đến Home (gây damage)
-        Dead            // Đã chết (bị bắn hoặc đã damage xong)
+        Dead            // Đã chết
     }
 
+    [Title("Status")]
+    [EnumToggleButtons]
+    [ShowInInspector, ReadOnly]
     protected EnemyState currentState = EnemyState.Spawning;
 
     #endregion
 
     #region Movement Configuration
 
-    [Header("Movement Settings")]
+    [Title("Configuration", "Movement & Stats", TitleAlignment = TitleAlignments.Centered)]
+    [BoxGroup("Stats")]
+    [HorizontalGroup("Stats/Split")]
+    [Range(1f, 10f)]
+    [LabelWidth(100), SuffixLabel("units/s")]
     [Tooltip("Tốc độ di chuyển (Unity units/giây)")]
     public float moveSpeed = 3f;
 
-    [Tooltip("Khoảng cách đủ gần để coi như đã đến waypoint (tránh overshoot)")]
+    [HorizontalGroup("Stats/Split")]
+    [LabelWidth(120), SuffixLabel("units")]
+    [Tooltip("Khoảng cách đủ gần để coi như đã đến waypoint")]
     public float waypointReachThreshold = 0.1f;
+
+    [BoxGroup("Stats")]
+    [Tooltip("Loại Pool (PHẢI khớp với PoolType trong PoolData)")]
+    public PoolType enemyType = PoolType.EnemyBasic;
 
     #endregion
 
     #region Protected Fields
 
     protected List<Vector3> pathWaypoints = new List<Vector3>();
+    
+    [ShowInInspector, ReadOnly, ProgressBar(0, "TotalWaypoints")]
+    [LabelText("Path Progress")]
     protected int currentWaypointIndex = 0;
 
-    [Header("Pooling")]
-    [Tooltip("Loại Pool (PHẢI khớp với PoolType trong PoolData)")]
-    public PoolType enemyType = PoolType.EnemyBasic;
+    protected int TotalWaypoints => pathWaypoints?.Count ?? 0;
 
     #endregion
 
     #region Setup & Lifecycle
 
     /// <summary>
-    /// Khởi tạo Enemy với đường đi (gọi từ bên ngoài khi spawn).
+    /// Khởi tạo Enemy với đường đi (Path).
     /// TEMPLATE METHOD: Gọi các hook methods cho subclass override.
     /// </summary>
     public virtual void Setup(List<Vector3> path)
@@ -55,7 +71,7 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
         if (path == null || path.Count == 0)
         {
             Debug.LogError($"[{GetType().Name}] Setup failed: Path is null or empty!");
-            Destroy(gameObject);
+            Destroy(gameObject); // Fallback destroy if setup fails hard
             return;
         }
 
@@ -66,13 +82,8 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
         // Đặt Enemy tại điểm đầu tiên
         transform.position = pathWaypoints[0];
 
-        // QUAN TRỌNG: Random tốc độ để tránh chồng chéo khi nhiều enemy cùng đường
-        moveSpeed *= Random.Range(0.8f, 1.2f);
-
         // Hook: Cho subclass custom logic khi spawn
         OnSpawnComplete();
-
-        Debug.Log($"[{GetType().Name}] Setup complete. Total waypoints: {pathWaypoints.Count}, Speed: {moveSpeed:F2}");
     }
 
     /// <summary>
@@ -80,7 +91,11 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
     /// </summary>
     protected virtual void OnSpawnComplete() { }
 
-    protected virtual void Update()
+    /// <summary>
+    /// Sử dụng FixedUpdate cho di chuyển để đảm bảo chuyển động ổn định.
+    /// KHÔNG phụ thuộc FPS như Update().
+    /// </summary>
+    protected virtual void FixedUpdate()
     {
         switch (currentState)
         {
@@ -97,7 +112,7 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
                 break;
 
             case EnemyState.Dead:
-                // Không làm gì, chờ Destroy
+                // Không làm gì, chờ ReturnToPool
                 break;
         }
     }
@@ -128,7 +143,7 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
             moveSpeed * Time.deltaTime
         );
 
-        // Quay mặt theo hướng di chuyển (optional, cho đẹp)
+        // Quay mặt theo hướng di chuyển
         Vector3 direction = (targetWaypoint - transform.position).normalized;
         if (direction != Vector3.zero)
         {
@@ -150,12 +165,12 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
     }
 
     /// <summary>
-    /// Hook Method: Override để xử lý khi đến waypoint.
+    /// Xử lý khi Enemy đến đích (Game Over hoặc trừ máu người chơi).
     /// </summary>
     protected virtual void OnReachWaypoint(int waypointIndex) { }
 
     /// <summary>
-    /// Xử lý khi Enemy đến Home Base.
+    /// Di chuyển Enemy hướng tới Waypoint tiếp theo.
     /// TEMPLATE METHOD: Gọi hook OnReachBase() cho subclass.
     /// </summary>
     protected virtual void HandleReachedBase()
@@ -185,13 +200,11 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
 
     /// <summary>
     /// PoolType property - Bắt buộc phải implement từ IPoolable.
-    /// Dùng để ObjectPoolManager biết trả về đúng pool.
     /// </summary>
     public PoolType PoolType => enemyType;
 
     /// <summary>
-    /// Gọi khi object được lấy ra từ Pool.
-    /// Reset trạng thái về như mới (máu đầy, vận tốc = 0, etc.)
+    /// Gọi khi lấy ra khỏi Pool. Reset máu, trạng thái.
     /// </summary>
     public virtual void OnSpawnFromPool()
     {
@@ -203,15 +216,14 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
         // Reset tốc độ về mặc định
         moveSpeed = 3f;
 
-        // TODO: Reset máu khi có health system
-        // health = maxHealth;
+        // ANTI-STACKING: Random tốc độ mỗi lần spawn để tránh quái đi trùng khít
+        moveSpeed *= Random.Range(0.8f, 1.2f); // Apply logic from old code
 
-        Debug.Log($"[{GetType().Name}] ✓ Spawned from pool (Type: {enemyType}).");
+        Debug.Log($"[{GetType().Name}] ✓ Spawned from pool (Type: {enemyType}, Speed: {moveSpeed:F2}).");
     }
 
     /// <summary>
     /// Gọi khi object được trả về Pool.
-    /// Cleanup resources (stop Coroutines, detach từ parent, etc.)
     /// </summary>
     public virtual void OnReturnToPool()
     {
@@ -226,8 +238,6 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
         // Reset position về gốc (tránh object bay ra ngoài map)
         transform.position = Vector3.zero;
         transform.rotation = Quaternion.identity;
-
-        Debug.Log($"[{GetType().Name}] ✓ Returned to pool (Type: {enemyType}).");
     }
 
     #endregion

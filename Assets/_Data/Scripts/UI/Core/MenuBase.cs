@@ -64,7 +64,7 @@ public abstract class MenuBase : SerializedMonoBehaviour
             AudioManager.Instance.PlaySFX(SoundType.MenuOpen);
         }
 
-        Debug.Log($"[MenuBase] Opened: {Type}");
+
     }
 
     /// <summary>
@@ -100,7 +100,7 @@ public abstract class MenuBase : SerializedMonoBehaviour
             AudioManager.Instance.PlaySFX(SoundType.MenuClose);
         }
 
-        Debug.Log($"[MenuBase] Closed (Internal): {Type}");
+
     }
 
     /// <summary>

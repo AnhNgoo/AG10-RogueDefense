@@ -2,8 +2,7 @@ using UnityEngine;
 using Sirenix.OdinInspector;
 
 /// <summary>
-/// SERIALIZABLE CLASS: Dữ liệu cấu hình cho 1 Pool.
-/// Sử dụng trong PoolConfig (List<PoolDataEntry>).
+/// Dữ liệu cấu hình cho một single Pool.
 /// </summary>
 [System.Serializable]
 public class PoolDataEntry
@@ -34,7 +33,7 @@ public class PoolDataEntry
     #region Validation
 
     /// <summary>
-    /// Kiểm tra config có hợp lệ không.
+    /// Validate cấu hình.
     /// </summary>
     public bool IsValid(out string errorMessage)
     {
