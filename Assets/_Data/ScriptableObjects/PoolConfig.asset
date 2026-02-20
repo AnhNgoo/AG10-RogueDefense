@@ -27,4 +27,27 @@ MonoBehaviour:
       type: 3}
     initialSize: 10
     maxSize: 50
-    parentName: Pool_Default
+    parentName: Pool_Enemy
+  - poolType: 150
+    prefab: {fileID: 1398463576221952648, guid: 91a3e390543ba3c479c2675ef211e906,
+      type: 3}
+    initialSize: 10
+    maxSize: 50
+    parentName: Pool_TowerFire
+  - poolType: 151
+    prefab: {fileID: 118904676414063636, guid: ab73c231b8188a24da622b083c2524a3, type: 3}
+    initialSize: 10
+    maxSize: 50
+    parentName: Pool_TowerWater
+  - poolType: 152
+    prefab: {fileID: 1862997268301758785, guid: f14242958ab891e49b7adbc927de5677,
+      type: 3}
+    initialSize: 10
+    maxSize: 50
+    parentName: Pool_TowerEarth
+  - poolType: 153
+    prefab: {fileID: 7312766571152804067, guid: b3d8a49e1aaeff24691ace2dc921c7d4,
+      type: 3}
+    initialSize: 10
+    maxSize: 50
+    parentName: Pool_TowerWind

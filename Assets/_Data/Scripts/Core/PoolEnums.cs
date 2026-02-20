@@ -11,6 +11,12 @@ public enum PoolType
     EnemySlow = 102,
     EnemyBoss = 103,
 
+    // === TOWERS ===
+    TowerFire = 150,    // Nấm Đỏ - Tấn công nhanh, gây DOT
+    TowerWater = 151,   // Thông Máy - Làm chậm địch
+    TowerEarth = 152,   // Pháo Đài - Sát thương AoE, phòng thủ
+    TowerWind = 153,    // Cối Tròn - Multi-target, tốc độ cao
+
     // === PROJECTILES ===
     BulletNormal = 200,
     BulletPiercing = 201,

@@ -57,6 +57,9 @@ public class WorldMapManager : SerializedMonoBehaviour
     [TabGroup("Tabs", "General"), BoxGroup("Tabs/General/Runtime Info"), ReadOnly, ShowInInspector]
     public int HiddenChunks => hiddenChunks?.Count ?? 0;
 
+    [TabGroup("Tabs", "General"), BoxGroup("Tabs/General/Runtime Info"), ReadOnly, ShowInInspector]
+    public int OccupiedTiles => _occupiedTiles?.Count ?? 0;
+
     #endregion
 
     #region Private Fields
@@ -65,6 +68,9 @@ public class WorldMapManager : SerializedMonoBehaviour
     private Dictionary<Vector2Int, ChunkData> worldChunks = new Dictionary<Vector2Int, ChunkData>();
     private List<ChunkData> hiddenChunks = new List<ChunkData>();
     private List<Vector2Int> visualizedCoords = new List<Vector2Int>();
+
+    // Tower Placement Tracking (NEW - Quản lý tile đã có tháp)
+    private Dictionary<Vector2Int, bool> _occupiedTiles = new Dictionary<Vector2Int, bool>();
 
     // Dependencies (Injected - SOLID Dependency Inversion Principle)
     private MapGenerator mapGenerator;
@@ -307,6 +313,207 @@ public class WorldMapManager : SerializedMonoBehaviour
 
         hiddenChunks.Clear();
         Debug.Log($"[WorldMapManager] ✓ Expanded {count} chunks. All chunks now visible.");
+    }
+
+    #endregion
+
+    #region Public Getters (Data Access)
+
+    /// <summary>
+    /// Get chunk data by coordinate
+    /// Used by CameraController for auto-align feature
+    /// </summary>
+    public ChunkData GetChunk(Vector2Int coord)
+    {
+        if (worldChunks != null && worldChunks.TryGetValue(coord, out ChunkData chunk))
+        {
+            return chunk;
+        }
+        return null;
+    }
+
+    #endregion
+
+    #region Tower Placement Support (NEW)
+
+    /// <summary>
+    /// Kiểm tra xem tile coordinate có đang bị chiếm bởi tháp không.
+    /// Used by TowerPlacementManager để validate vị trí đặt tháp.
+    /// </summary>
+    public bool IsTileOccupied(Vector2Int tileCoord)
+    {
+        return _occupiedTiles.ContainsKey(tileCoord) && _occupiedTiles[tileCoord];
+    }
+
+    /// <summary>
+    /// Đánh dấu tile coordinate đã có tháp.
+    /// Gọi bởi TowerPlacementManager khi đặt tháp thành công.
+    /// </summary>
+    public void MarkTileOccupied(Vector2Int tileCoord)
+    {
+        if (!_occupiedTiles.ContainsKey(tileCoord))
+        {
+            _occupiedTiles.Add(tileCoord, true);
+        }
+        else
+        {
+            _occupiedTiles[tileCoord] = true;
+        }
+
+        Debug.Log($"[WorldMapManager] Tile {tileCoord} đã được đánh dấu occupied.");
+    }
+
+    /// <summary>
+    /// Giải phóng tile coordinate (khi bán/phá hủy tháp).
+    /// Gọi bởi TowerPlacementManager hoặc TowerManager khi remove tháp.
+    /// </summary>
+    public void FreeTile(Vector2Int tileCoord)
+    {
+        if (_occupiedTiles.ContainsKey(tileCoord))
+        {
+            _occupiedTiles[tileCoord] = false;
+            Debug.Log($"[WorldMapManager] Tile {tileCoord} đã được giải phóng.");
+        }
+    }
+
+    /// <summary>
+    /// Clear tất cả occupied tiles (khi reset map hoặc new game).
+    /// </summary>
+    public void ClearOccupiedTiles()
+    {
+        _occupiedTiles.Clear();
+        Debug.Log("[WorldMapManager] Đã clear tất cả occupied tiles.");
+    }
+
+    /// <summary>
+    /// Lấy TileType từ Global Tile Coordinate.
+    /// Used by TowerPlacementManager để validate loại tile (Ground, Path, etc.).
+    /// FIXED: Helper method giúp TowerPlacementManager convert tọa độ chính xác với CenterOffset.
+    /// </summary>
+    /// <param name="globalTileCoord">Global Tile Coordinate (chunkCoord * chunkSize + localTileIndex)</param>
+    /// <returns>TileType của tile đó, hoặc TileType.EndPoint nếu tile không tồn tại.</returns>
+    public TileType GetTileType(Vector2Int globalTileCoord)
+    {
+        if (settings == null)
+        {
+            Debug.LogError("[WorldMapManager] MapGenerationSettings null! Không thể lấy TileType.");
+            return TileType.EndPoint;
+        }
+
+        // ========================================
+        // BƯỚC 1: Phân tách Global Tile Coord -> Chunk Coord & Local Tile Index
+        // ========================================
+        int chunkX = Mathf.FloorToInt((float)globalTileCoord.x / settings.chunkSize);
+        int chunkZ = Mathf.FloorToInt((float)globalTileCoord.y / settings.chunkSize);
+
+        int localX = globalTileCoord.x - (chunkX * settings.chunkSize);
+        int localZ = globalTileCoord.y - (chunkZ * settings.chunkSize);
+
+        // ========================================
+        // BƯỚC 2: Lấy ChunkData từ worldChunks
+        // ========================================
+        Vector2Int chunkCoord = new Vector2Int(chunkX, chunkZ);
+
+        if (worldChunks != null && worldChunks.TryGetValue(chunkCoord, out ChunkData chunk))
+        {
+            // Clamp local index về range hợp lệ (0 đến chunkSize-1)
+            int safeLocalX = Mathf.Clamp(localX, 0, settings.chunkSize - 1);
+            int safeLocalZ = Mathf.Clamp(localZ, 0, settings.chunkSize - 1);
+
+            // Trả về TileType
+            return chunk.tiles[safeLocalX, safeLocalZ];
+        }
+
+        // ========================================
+        // BƯỚC 3: Tile không tồn tại trong map -> Trả về EndPoint như marker
+        // ========================================
+        return TileType.EndPoint; // Marker cho Tile không hợp lệ
+    }
+
+    /// <summary>
+    /// Tính toán CHÍNH XÁC tọa độ tâm (World Position) của một tile dựa trên Data.
+    /// QUAN TRỌNG: Đây là phương pháp ĐÚNG để lấy vị trí đặt tháp, không dựa vào Mesh (vì mesh đã bị gộp).
+    /// CÔNG THỨC: Đồng bộ 100% với OnDrawGizmos() để đảm bảo tháp nằm đúng tâm ô lưới.
+    /// FIXED: Bây giờ tính đúng CAO ĐỘ Y dựa trên TileType (Ground=1f, Path=0f).
+    /// </summary>
+    /// <param name="tileCoord">Global Tile Coordinate (chunkCoord * chunkSize + localTileIndex)</param>
+    /// <returns>World Position 3D của tâm tile (Bao gồm đúng cao độ Y)</returns>
+    public Vector3 GetTileCenterWorldPosition(Vector2Int tileCoord)
+    {
+        if (settings == null)
+        {
+            Debug.LogError("[WorldMapManager] MapGenerationSettings null! Không thể tính tile center.");
+            return Vector3.zero;
+        }
+
+        // ========================================
+        // BƯỚC 1: Phân tách Global Tile Coord -> Chunk Coord & Local Tile Index
+        // ========================================
+        int chunkX = Mathf.FloorToInt((float)tileCoord.x / settings.chunkSize);
+        int chunkZ = Mathf.FloorToInt((float)tileCoord.y / settings.chunkSize);
+
+        int localX = tileCoord.x - (chunkX * settings.chunkSize);
+        int localZ = tileCoord.y - (chunkZ * settings.chunkSize);
+
+        // ========================================
+        // BƯỚC 1.5: Lấy TileType để xác định cao độ Y (CRITICAL FIX)
+        // ========================================
+        float tileHeightY = 0f; // Mặc định cho Path
+        Vector2Int chunkCoord = new Vector2Int(chunkX, chunkZ);
+
+        if (worldChunks != null && worldChunks.TryGetValue(chunkCoord, out ChunkData chunk))
+        {
+            // Clamp local index về range hợp lệ
+            int safeLocalX = Mathf.Clamp(localX, 0, settings.chunkSize - 1);
+            int safeLocalZ = Mathf.Clamp(localZ, 0, settings.chunkSize - 1);
+
+            TileType tileType = chunk.tiles[safeLocalX, safeLocalZ];
+
+            // Xác định cao độ Y dựa trên TileType
+            switch (tileType)
+            {
+                case TileType.Ground:
+                    tileHeightY = 1f; // Ground (cỏ) cao hơn Path
+                    break;
+                case TileType.Path:
+                case TileType.Home:
+                case TileType.StartPoint:
+                case TileType.EndPoint:
+                default:
+                    tileHeightY = 0f; // Path và các loại khác ở mặt đất
+                    break;
+            }
+        }
+        else
+        {
+            Debug.LogWarning($"[WorldMapManager] Không tìm thấy chunk {chunkCoord} khi tính tile center! Fallback Y=0.");
+        }
+
+        // ========================================
+        // BƯỚC 2: Tính World Position của Chunk
+        // ========================================
+        Vector3 chunkWorldPos = new Vector3(
+            chunkX * settings.ChunkWorldSize,
+            0, // Chunk origin luôn ở Y=0, cao độ tile sẽ cộng sau
+            chunkZ * settings.ChunkWorldSize
+        );
+
+        // ========================================
+        // BƯỚC 3: Tính Local Position của Tile trong Chunk (X, Z) + CAO ĐỘ Y
+        // CÔNG THỨC QUAN TRỌNG: (localIndex * tileSize) - CenterOffset
+        // ========================================
+        Vector3 tileLocalPos = new Vector3(
+            (localX * settings.tileSize) - settings.CenterOffset,
+            tileHeightY, // CAO ĐỘ THỰC TẾ của tile (Ground=1f, Path=0f)
+            (localZ * settings.tileSize) - settings.CenterOffset
+        );
+
+        // ========================================
+        // BƯỚC 4: Tổng hợp World Position tuyệt đối
+        // ========================================
+        Vector3 tileCenterWorld = chunkWorldPos + tileLocalPos;
+
+        return tileCenterWorld;
     }
 
     #endregion
