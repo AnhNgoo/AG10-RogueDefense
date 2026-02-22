@@ -6,9 +6,10 @@ using Sirenix.OdinInspector;
 /// BASE CLASS: Enemy cơ bản với FSM và Waypoint Movement.
 /// Open/Closed Principle: Open for extension (kế thừa), Closed for modification (không sửa core logic).
 /// OBJECT POOLING: Implement IPoolable để tái sử dụng thay vì Destroy.
+/// HEALTH SYSTEM: Tích hợp HealthComponent và implement IDamageable.
 /// Refactored with Odin Inspector for better Visualization.
 /// </summary>
-public abstract class EnemyBase : MonoBehaviour, IPoolable
+public abstract class EnemyBase : MonoBehaviour, IPoolable, IDamageable
 {
     #region State Machine
 
@@ -24,6 +25,16 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
     [EnumToggleButtons]
     [ShowInInspector, ReadOnly]
     protected EnemyState currentState = EnemyState.Spawning;
+
+    #endregion
+
+    #region Static Tracking (For Tower AI)
+
+    /// <summary>
+    /// Danh sách TẤT CẢ enemies đang active trong game.
+    /// Tower sẽ duyệt list này để tìm target (ZERO PHYSICS - không dùng OverlapSphere).
+    /// </summary>
+    public static readonly List<EnemyBase> ActiveEnemiesList = new List<EnemyBase>();
 
     #endregion
 
@@ -46,17 +57,52 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
     [Tooltip("Loại Pool (PHẢI khớp với PoolType trong PoolData)")]
     public PoolType enemyType = PoolType.EnemyBasic;
 
+    [BoxGroup("Stats")]
+    [Required]
+    [Tooltip("Component quản lý máu (MANDATORY)")]
+    [SerializeField] protected HealthComponent healthComponent;
+
     #endregion
 
     #region Protected Fields
 
     protected List<Vector3> pathWaypoints = new List<Vector3>();
-    
+
     [ShowInInspector, ReadOnly, ProgressBar(0, "TotalWaypoints")]
     [LabelText("Path Progress")]
     protected int currentWaypointIndex = 0;
 
     protected int TotalWaypoints => pathWaypoints?.Count ?? 0;
+
+    // Cờ ngăn FSM spam HandleReachedBase() mỗi frame
+    private bool _isHandlingReachBase = false;
+
+    // Cờ ngăn trừ ActiveEnemies nhiều lần khi chết
+    private bool _isCountedAsDead = false;
+
+    #endregion
+
+    #region Public Properties (For Tower AI)
+
+    /// <summary>
+    /// Index của waypoint hiện tại (dùng cho Tower AI tính Progress Score).
+    /// </summary>
+    public int CurrentWaypointIndex => currentWaypointIndex;
+
+    /// <summary>
+    /// Lấy vị trí waypoint TIẾP THEO mà enemy đang đi tới.
+    /// Dùng cho Tower AI để dự đoán vị trí enemy trong tương lai.
+    /// </summary>
+    public Vector3 GetNextWaypointPosition()
+    {
+        if (pathWaypoints == null || pathWaypoints.Count == 0)
+            return transform.position;
+
+        if (currentWaypointIndex >= pathWaypoints.Count)
+            return transform.position; // Đã đến cuối path
+
+        return pathWaypoints[currentWaypointIndex];
+    }
 
     #endregion
 
@@ -108,7 +154,12 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
                 break;
 
             case EnemyState.ReachedBase:
-                HandleReachedBase();
+                // Chỉ gọi HandleReachedBase() 1 LẦN DUY NHẤT khi chuyển state
+                if (!_isHandlingReachBase)
+                {
+                    _isHandlingReachBase = true;
+                    HandleReachedBase();
+                }
                 break;
 
             case EnemyState.Dead:
@@ -180,6 +231,14 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
         // Hook: Cho subclass xử lý damage logic
         OnReachBase();
 
+        // CRITICAL: Giảm số lượng enemy đang active (chỉ 1 lần)
+        if (!_isCountedAsDead)
+        {
+            _isCountedAsDead = true;
+            EnemySpawner.ActiveEnemies--;
+            Debug.Log($"[{GetType().Name}] ActiveEnemies giảm xuống: {EnemySpawner.ActiveEnemies}");
+        }
+
         // Chuyển sang trạng thái Dead và RETURN TO POOL (không Destroy)
         currentState = EnemyState.Dead;
         ObjectPoolManager.Instance.ReturnToPool(gameObject);
@@ -193,6 +252,79 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
         // TODO: Gọi GameManager để trừ máu Player
         // GameManager.Instance.TakeDamage(damageAmount);
     }
+
+    #endregion
+
+    #region IDamageable Implementation
+
+    /// <summary>
+    /// Nhận sát thương từ Tower, Spell, etc.
+    /// Delegate sang HealthComponent.
+    /// </summary>
+    public void TakeDamage(float amount)
+    {
+        if (healthComponent != null)
+        {
+            healthComponent.TakeDamage(amount);
+
+            // FIX: Chỉ gọi visual feedback nếu enemy VẪN CÒN SỐNG sau khi bị trừ máu
+            // Tránh lỗi NullReference khi enemy chết ngay lập tức (máu <= 0)
+            if (!IsDead)
+            {
+                OnTakeDamage(amount);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Kiểm tra đã chết chưa (IDamageable).
+    /// </summary>
+    public bool IsDead => healthComponent != null && healthComponent.IsDead;
+
+    /// <summary>
+    /// Vị trí hiện tại (IDamageable).
+    /// </summary>
+    public Vector3 Position => transform.position;
+
+    /// <summary>
+    /// Hook Method: Override để xử lý visual feedback khi nhận damage.
+    /// Ví dụ: Play animation TakeDamage, spawn blood VFX, shake model, etc.
+    /// </summary>
+    protected virtual void OnTakeDamage(float amount) { }
+
+    #endregion
+
+    #region Health System
+
+    /// <summary>
+    /// Xử lý khi Enemy chết (gọi bởi HealthComponent.OnDeath event).
+    /// Giảm số lượng ActiveEnemies VÀ Return về Pool.
+    /// </summary>
+    private void HandleDeath()
+    {
+        // CRITICAL: Chỉ giảm ActiveEnemies 1 LẦN DUY NHẤT
+        if (!_isCountedAsDead)
+        {
+            _isCountedAsDead = true;
+            EnemySpawner.ActiveEnemies--;
+            Debug.Log($"[{GetType().Name}] Chết! ActiveEnemies giảm xuống: {EnemySpawner.ActiveEnemies}");
+        }
+
+        // Hook: Cho subclass xử lý logic khi chết (spawn VFX, drop loot, etc.)
+        OnDie();
+
+        // Chuyển state sang Dead
+        currentState = EnemyState.Dead;
+
+        // Return về Pool
+        ObjectPoolManager.Instance.ReturnToPool(gameObject);
+    }
+
+    /// <summary>
+    /// Hook Method: Override để xử lý logic khi enemy chết.
+    /// Ví dụ: Spawn death VFX, drop gold, play death sound, etc.
+    /// </summary>
+    protected virtual void OnDie() { }
 
     #endregion
 
@@ -213,11 +345,36 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
         currentWaypointIndex = 0;
         pathWaypoints.Clear();
 
+        // Reset cờ HandleReachedBase
+        _isHandlingReachBase = false;
+
+        // CRITICAL: Reset cờ đếm chết
+        _isCountedAsDead = false;
+
         // Reset tốc độ về mặc định
         moveSpeed = 3f;
 
         // ANTI-STACKING: Random tốc độ mỗi lần spawn để tránh quái đi trùng khít
-        moveSpeed *= Random.Range(0.8f, 1.2f); // Apply logic from old code
+        moveSpeed *= Random.Range(0.8f, 1.2f);
+
+        // Khởi tạo Health Component
+        if (healthComponent != null)
+        {
+            healthComponent.Initialize();
+
+            // Subscribe vào event OnDeath
+            healthComponent.OnDeath += HandleDeath;
+        }
+        else
+        {
+            Debug.LogError($"[{GetType().Name}] HealthComponent null! Không thể spawn enemy.");
+        }
+
+        // CRITICAL: Thêm vào Static List để Tower AI có thể tracking
+        if (!ActiveEnemiesList.Contains(this))
+        {
+            ActiveEnemiesList.Add(this);
+        }
 
         Debug.Log($"[{GetType().Name}] ✓ Spawned from pool (Type: {enemyType}, Speed: {moveSpeed:F2}).");
     }
@@ -227,6 +384,18 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
     /// </summary>
     public virtual void OnReturnToPool()
     {
+        // CRITICAL: Xóa khỏi Static List
+        if (ActiveEnemiesList.Contains(this))
+        {
+            ActiveEnemiesList.Remove(this);
+        }
+
+        // Unsubscribe khỏi HealthComponent events
+        if (healthComponent != null)
+        {
+            healthComponent.OnDeath -= HandleDeath;
+        }
+
         // Stop tất cả Coroutines (nếu có)
         StopAllCoroutines();
 
@@ -234,6 +403,12 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable
         currentState = EnemyState.Dead;
         pathWaypoints.Clear();
         currentWaypointIndex = 0;
+
+        // Reset cờ HandleReachedBase
+        _isHandlingReachBase = false;
+
+        // Reset cờ đếm chết
+        _isCountedAsDead = false;
 
         // Reset position về gốc (tránh object bay ra ngoài map)
         transform.position = Vector3.zero;

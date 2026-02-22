@@ -179,6 +179,11 @@ public class TowerPlacementManager : SerializedMonoBehaviour
     #region Public API
 
     /// <summary>
+    /// Property để TowerInteractionManager kiểm tra xem có đang ở chế độ placement không.
+    /// </summary>
+    public bool IsPlacementMode => _isPlacementMode;
+
+    /// <summary>
     /// Chọn loại tháp để bắt đầu placement mode.
     /// Gọi khi player bấm nút UI chọn tháp.
     /// </summary>
@@ -471,11 +476,25 @@ public class TowerPlacementManager : SerializedMonoBehaviour
             return;
         }
 
+        // Đọc AttackRange từ Tower Prefab và đặt cho Range Indicator
+        if (config.towerPrefab != null)
+        {
+            float attackRange = config.towerPrefab.AttackRange;
+            _currentGhost.SetRange(attackRange);
+        }
+        else
+        {
+            Debug.LogWarning($"[TowerPlacementManager] Tower Prefab cho {towerType} chưa được gán! Range Indicator sẽ bị sai.");
+        }
+
         _currentGhost.Show(Vector3.zero);
     }
 
     /// <summary>
-    /// Kiểm tra vị trí có phải Ground tile không.
+    /// Kiểm tra vị trí có phải Ground tile hợp lệ không.
+    /// Validation:
+    /// - Tile phải thuộc chunk đã được mở (visualized).
+    /// - TileType phải là Ground (không phải Path, Home, etc.).
     /// Output: tileCoord (tọa độ tile), tileType (loại tile).
     /// </summary>
     private bool IsGroundTile(Vector3 worldPosition, out Vector2Int tileCoord, out TileType tileType)
@@ -497,6 +516,20 @@ public class TowerPlacementManager : SerializedMonoBehaviour
 
         tileCoord = new Vector2Int(globalTileX, globalTileZ);
 
+        // Tính chunk coordinate từ tile coordinate
+        int chunkSize = _mapSettings.chunkSize;
+        int chunkX = Mathf.FloorToInt((float)globalTileX / chunkSize);
+        int chunkZ = Mathf.FloorToInt((float)globalTileZ / chunkSize);
+        Vector2Int chunkCoord = new Vector2Int(chunkX, chunkZ);
+
+        // KIỂM TRA: Chunk đã được mở chưa?
+        if (!_worldMapManager.IsChunkVisualized(chunkCoord))
+        {
+            tileType = TileType.EndPoint; // Marker: vị trí không hợp lệ
+            return false;
+        }
+
+        // Kiểm tra TileType
         tileType = _worldMapManager.GetTileType(tileCoord);
 
         if (tileType == TileType.EndPoint)
@@ -532,6 +565,7 @@ public class TowerPlacementManager : SerializedMonoBehaviour
         if (tower != null)
         {
             tower.Initialize(worldPosition);
+            tower.SetTileCoordinate(tileCoord); // Lưu tọa độ tile để dùng khi bán tháp
         }
 
         if (_worldMapManager != null)
@@ -565,7 +599,7 @@ public class TowerPlacementManager : SerializedMonoBehaviour
 }
 
 /// <summary>
-/// Cấu hình cho mỗi loại tháp (PoolType -> Ghost Prefab).
+/// Cấu hình cho mỗi loại tháp (PoolType -> Ghost Prefab + Tower Prefab).
 /// </summary>
 [Serializable]
 public struct TowerPlacementData
@@ -580,4 +614,10 @@ public struct TowerPlacementData
     [PreviewField(50, ObjectFieldAlignment.Left)]
     [Tooltip("Prefab Ghost tương ứng")]
     public GameObject ghostPrefab;
+
+    [HorizontalGroup("Row")]
+    [Required]
+    [PreviewField(50, ObjectFieldAlignment.Left)]
+    [Tooltip("Prefab Tower gốc (để đọc AttackRange)")]
+    public TowerBase towerPrefab;
 }

@@ -8,9 +8,29 @@ using Sirenix.OdinInspector;
 /// Vai trò: Quản lý state, gọi MapGenerator để sinh dữ liệu, gọi MapVisualizer để hiển thị.
 /// Không chứa logic tính toán map (đã tách sang MapGenerator) hay logic render (đã tách sang MapVisualizer).
 /// SOLID: Tuân thủ Single Responsibility (chỉ orchestrate) và Dependency Inversion (inject services).
+/// SINGLETON: Global access cho ChunkExpandNode và Tower system.
 /// </summary>
 public class WorldMapManager : SerializedMonoBehaviour
 {
+    #region Singleton Pattern
+
+    public static WorldMapManager Instance { get; private set; }
+
+    private void Awake()
+    {
+        // Singleton Setup
+        if (Instance != null && Instance != this)
+        {
+            Debug.LogWarning("[WorldMapManager] Instance đã tồn tại! Hủy duplicate.");
+            Destroy(gameObject);
+            return;
+        }
+
+        Instance = this;
+    }
+
+    #endregion
+
     #region Inspector Configuration
 
     [TabGroup("Tabs", "Settings"), BoxGroup("Tabs/Settings/References"), Required]
@@ -45,6 +65,10 @@ public class WorldMapManager : SerializedMonoBehaviour
     [Tooltip("Hiển thị Gizmos trong Scene View")]
     public bool showGizmos = true;
 
+    [TabGroup("Tabs", "Settings"), BoxGroup("Tabs/Settings/Expand Node"), Required]
+    [Tooltip("Prefab của World Space UI Node để người chơi click và mở rộng chunk")]
+    [SerializeField] private GameObject _expandNodePrefab;
+
     [TabGroup("Tabs", "General"), BoxGroup("Tabs/General/Runtime Info"), ReadOnly, ShowInInspector]
     public int CurrentSeed => seed;
 
@@ -71,6 +95,9 @@ public class WorldMapManager : SerializedMonoBehaviour
 
     // Tower Placement Tracking (NEW - Quản lý tile đã có tháp)
     private Dictionary<Vector2Int, bool> _occupiedTiles = new Dictionary<Vector2Int, bool>();
+
+    // Expand Node Management (World Space UI)
+    private List<ChunkExpandNode> _activeExpandNodes = new List<ChunkExpandNode>();
 
     // Dependencies (Injected - SOLID Dependency Inversion Principle)
     private MapGenerator mapGenerator;
@@ -201,7 +228,7 @@ public class WorldMapManager : SerializedMonoBehaviour
         }
     }
 
-    [TabGroup("Tabs", "General"), Button("Expand One Chunk", ButtonSizes.Medium), GUIColor(0.4f, 1f, 0.4f)]
+    [TabGroup("Tabs", "General"), Button("Expand One Chunk (Auto)", ButtonSizes.Medium), GUIColor(0.4f, 1f, 0.4f)]
     [EnableIf("@hiddenChunks != null && hiddenChunks.Count > 0")]
     public void ExpandOneChunk()
     {
@@ -252,6 +279,28 @@ public class WorldMapManager : SerializedMonoBehaviour
             Debug.LogWarning("[WorldMapManager] Không tìm thấy chunk có kết nối đường đi. Fallback lấy chunk gần nhất.");
         }
 
+        // Gọi method chung để expand
+        ExpandChunk(chunkToExpand);
+    }
+
+    /// <summary>
+    /// Mở rộng một chunk cụ thể (Gọi bởi ExpandOneChunk hoặc ChunkExpandNode).
+    /// REFACTORED: Tách logic expand ra method riêng để ChunkExpandNode có thể gọi trực tiếp.
+    /// </summary>
+    public void ExpandChunk(ChunkData chunkToExpand)
+    {
+        if (chunkToExpand == null)
+        {
+            Debug.LogError("[WorldMapManager] ExpandChunk: Chunk null!");
+            return;
+        }
+
+        if (!hiddenChunks.Contains(chunkToExpand))
+        {
+            Debug.LogWarning($"[WorldMapManager] Chunk {chunkToExpand.chunkCoord} không nằm trong hidden list!");
+            return;
+        }
+
         // Xóa khỏi hidden list và thêm vào visualized list
         hiddenChunks.Remove(chunkToExpand);
         visualizedCoords.Add(chunkToExpand.chunkCoord);
@@ -280,6 +329,11 @@ public class WorldMapManager : SerializedMonoBehaviour
             if (isDirectNeighbor) return 0; // Ưu tiên cao nhất
             return Mathf.Abs(c.chunkCoord.x) + Mathf.Abs(c.chunkCoord.y); // Manhattan distance
         }).ToList();
+
+        // ========================================
+        // CẬP NHẬT EXPAND NODES (Spawn nodes mới tại các chunk có thể mở rộng)
+        // ========================================
+        UpdateExpandNodes();
 
         // ========================================
         // SPAWN WAVE (DELEGATION TO ENEMYSPAWNER)
@@ -320,8 +374,8 @@ public class WorldMapManager : SerializedMonoBehaviour
     #region Public Getters (Data Access)
 
     /// <summary>
-    /// Get chunk data by coordinate
-    /// Used by CameraController for auto-align feature
+    /// Lấy chunk data theo coordinate.
+    /// Sử dụng bởi CameraController để auto-align.
     /// </summary>
     public ChunkData GetChunk(Vector2Int coord)
     {
@@ -330,6 +384,15 @@ public class WorldMapManager : SerializedMonoBehaviour
             return chunk;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Kiểm tra chunk đã được mở (visualize) chưa.
+    /// Sử dụng bởi TowerPlacementManager để ngăn đặt tháp ngoài vùng đã mở.
+    /// </summary>
+    public bool IsChunkVisualized(Vector2Int chunkCoord)
+    {
+        return visualizedCoords != null && visualizedCoords.Contains(chunkCoord);
     }
 
     #endregion
@@ -545,7 +608,114 @@ public class WorldMapManager : SerializedMonoBehaviour
             }
         }
 
+        // Spawn Expand Nodes tại các chunk có thể mở rộng
+        UpdateExpandNodes();
+
         Debug.Log($"[WorldMapManager] ✓ Base Chunk visualized. {hiddenChunks.Count} chunks hidden. Use 'Expand One Chunk' button to reveal.");
+    }
+
+    /// <summary>
+    /// Cập nhật World Space UI Expand Nodes tại các chunk có thể mở rộng.
+    /// THUẬT TOÁN: Duyệt exitPoints của visualizedCoords -> Tính neighbor coords -> Kiểm tra nằm trong hiddenChunks.
+    /// Spawn node tại tâm chunk (tile [4,4]) + Y offset 2f để nổi lên trên mặt đất.
+    /// </summary>
+    private void UpdateExpandNodes()
+    {
+        // ========================================
+        // BƯỚC 1: XÓA TẤT CẢ NODES CŨ
+        // ========================================
+        foreach (var node in _activeExpandNodes)
+        {
+            if (node != null && node.gameObject != null)
+            {
+                Destroy(node.gameObject);
+            }
+        }
+        _activeExpandNodes.Clear();
+
+        // ========================================
+        // BƯỚC 2: KIỂM TRA PREFAB VÀ HIDDEN CHUNKS
+        // ========================================
+        if (_expandNodePrefab == null)
+        {
+            Debug.LogWarning("[WorldMapManager] Expand Node Prefab chưa được gán! Không thể spawn nodes.");
+            return;
+        }
+
+        if (hiddenChunks == null || hiddenChunks.Count == 0)
+        {
+            // Không còn chunk ẩn -> Không cần nodes
+            return;
+        }
+
+        // ========================================
+        // BƯỚC 3: PHÁT HIỆN CÁC CHUNK CÓ THỂ MỞ RỘNG
+        // ========================================
+        HashSet<Vector2Int> expandableCoords = new HashSet<Vector2Int>(); // Dùng HashSet để tránh duplicate
+
+        // Duyệt qua tất cả chunks đã visualize
+        foreach (var visCoord in visualizedCoords)
+        {
+            // Lấy chunk data
+            if (!worldChunks.TryGetValue(visCoord, out ChunkData visChunk))
+                continue;
+
+            // Duyệt qua các ExitPoint của chunk này
+            foreach (var exitPoint in visChunk.exitPoints)
+            {
+                // Tính hướng đi ra từ ExitPoint (DELEGATION TO MAPPATHFINDER)
+                Vector2Int direction = mapPathfinder.GetDirectionFromEdgeTile(exitPoint);
+
+                // Tính tọa độ chunk hàng xóm
+                Vector2Int neighborCoord = visCoord + direction;
+
+                // Kiểm tra xem neighbor có trong hiddenChunks không
+                bool isExpandable = hiddenChunks.Any(c => c.chunkCoord == neighborCoord);
+
+                if (isExpandable)
+                {
+                    // Đây là chunk có thể mở rộng -> Thêm vào set
+                    expandableCoords.Add(neighborCoord);
+                }
+            }
+        }
+
+        // ========================================
+        // BƯỚC 4: SPAWN NODES TẠI CÁC EXPANDABLE CHUNKS
+        // ========================================
+        foreach (var expandCoord in expandableCoords)
+        {
+            // Lấy ChunkData tương ứng
+            ChunkData targetChunk = hiddenChunks.FirstOrDefault(c => c.chunkCoord == expandCoord);
+            if (targetChunk == null)
+            {
+                Debug.LogWarning($"[WorldMapManager] Không tìm thấy ChunkData cho coord {expandCoord}!");
+                continue;
+            }
+
+            // Tính vị trí node: Tâm chunk (tile 4,4) + offset Y=2f
+            Vector2Int centerTileCoord = expandCoord * settings.chunkSize + new Vector2Int(4, 4);
+            Vector3 nodePosition = GetTileCenterWorldPosition(centerTileCoord) + Vector3.up * 2f;
+
+            // Instantiate node
+            GameObject nodeObj = Instantiate(_expandNodePrefab, nodePosition, Quaternion.identity, transform);
+            nodeObj.name = $"ExpandNode_{expandCoord.x}_{expandCoord.y}";
+
+            // Initialize node với chunk target
+            ChunkExpandNode nodeComponent = nodeObj.GetComponent<ChunkExpandNode>();
+            if (nodeComponent != null)
+            {
+                nodeComponent.Initialize(targetChunk, expandCoord);
+                _activeExpandNodes.Add(nodeComponent);
+            }
+            else
+            {
+                Debug.LogError($"[WorldMapManager] Prefab {_expandNodePrefab.name} không có component ChunkExpandNode!");
+                Destroy(nodeObj);
+            }
+        }
+
+        Debug.Log($"[WorldMapManager] ✓ Updated Expand Nodes: {_activeExpandNodes.Count} nodes spawned.");
     }
 
     /// <summary>

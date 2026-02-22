@@ -45,6 +45,12 @@ public class TowerGhost : MonoBehaviour
     [Tooltip("Canvas luôn hướng về Camera (Billboard effect)")]
     [SerializeField] private bool _enableBillboard = true;
 
+    [Title("Range Indicator")]
+    [BoxGroup("Range Indicator")]
+    [Required]
+    [Tooltip("Transform của vòng tròn tầm bắn (Cylinder hoặc Quad). Đặt dưới chân Ghost.")]
+    [SerializeField] private Transform _rangeIndicator;
+
     [BoxGroup("Settings")]
     [Tooltip("Offset Y so với vị trí đặt thật (để ghost nổi lên một chút)")]
     [SerializeField] private float _heightOffset = 0.2f;
@@ -201,6 +207,25 @@ public class TowerGhost : MonoBehaviour
     /// Lấy trạng thái hiện tại của ghost.
     /// </summary>
     public bool IsValidPlacement() => _isValidPlacement;
+
+    /// <summary>
+    /// Đặt tầm bắn cho vòng tròn Range Indicator.
+    /// Gọi bởi TowerPlacementManager khi spawn Ghost.
+    /// </summary>
+    /// <param name="range">Tầm bắn của tháp (Unity Units)</param>
+    public void SetRange(float range)
+    {
+        if (_rangeIndicator == null)
+        {
+            Debug.LogWarning("[TowerGhost] Range Indicator chưa được gán!", gameObject);
+            return;
+        }
+
+        // Đường kính vòng tròn = range * 2
+        // Vì Cylinder/Quad có size mặc định là 1 unit, ta scale theo range*2
+        // Y giữ nguyên 1 (chiều cao của Cylinder)
+        _rangeIndicator.localScale = new Vector3(range * 2f, range * 2f, range * 2f);
+    }
 
     /// <summary>
     /// Hiển thị/Ẩn World Space Confirm UI (gọi khi Ghost đóng băng chờ xác nhận).

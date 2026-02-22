@@ -1,10 +1,12 @@
 using UnityEngine;
 using Sirenix.OdinInspector;
-using System.Collections;
+using Cysharp.Threading.Tasks;
+using System.Threading;
 
 /// <summary>
 /// Singleton Manager xử lý toàn bộ âm thanh trong game.
 /// Tồn tại qua các scene.
+/// OPTIMIZED: Sử dụng UniTask thay vì Coroutine để tối ưu performance.
 /// </summary>
 public class AudioManager : MonoBehaviour
 {
@@ -73,8 +75,11 @@ public class AudioManager : MonoBehaviour
     private SoundType _currentMusicType = SoundType.None;
     private AudioData.SoundEntry _currentPlaylist;
     private int _currentTrackIndex = 0;
-    private Coroutine _playlistCoroutine;
-    private Coroutine _fadeCoroutine;
+
+    // UniTask CancellationTokens (thay thế Coroutine)
+    private CancellationTokenSource _playlistCts;
+    private CancellationTokenSource _fadeCts;
+    private CancellationTokenSource _demoSfxCts; // Debounce SFX demo khi kéo slider
 
     #endregion
 
@@ -96,6 +101,17 @@ public class AudioManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
 
         Initialize();
+    }
+
+    private void OnDestroy()
+    {
+        // Cleanup: Cancel và Dispose tất cả CancellationTokenSource
+        _playlistCts?.Cancel();
+        _playlistCts?.Dispose();
+        _fadeCts?.Cancel();
+        _fadeCts?.Dispose();
+        _demoSfxCts?.Cancel();
+        _demoSfxCts?.Dispose();
     }
 
     #endregion
@@ -138,6 +154,7 @@ public class AudioManager : MonoBehaviour
 
     /// <summary>
     /// Phát nhạc nền có hỗ trợ playlist.
+    /// OPTIMIZED: Sử dụng UniTask thay vì Coroutine.
     /// </summary>
     public void PlayMusic(SoundType type, bool forceRestart = false)
     {
@@ -154,12 +171,10 @@ public class AudioManager : MonoBehaviour
             return;
         }
 
-        // QUAN TRỌNG: Ngắt fade coroutine cũ nếu đang chạy (tránh race condition)
-        if (_fadeCoroutine != null)
-        {
-            StopCoroutine(_fadeCoroutine);
-            _fadeCoroutine = null;
-        }
+        // QUAN TRỌNG: Ngắt fade task cũ nếu đang chạy (tránh race condition)
+        _fadeCts?.Cancel();
+        _fadeCts?.Dispose();
+        _fadeCts = null;
 
         // Reset volume về mức cài đặt (vì fade out có thể đã giảm volume)
         _musicSource.volume = GetMusicVolume();
@@ -172,126 +187,140 @@ public class AudioManager : MonoBehaviour
             return;
         }
 
-        // Stop coroutine cũ nếu có
-        if (_playlistCoroutine != null)
-        {
-            StopCoroutine(_playlistCoroutine);
-        }
+        // Stop playlist task cũ nếu có
+        _playlistCts?.Cancel();
+        _playlistCts?.Dispose();
 
         // Lưu state
         _currentMusicType = type;
         _currentPlaylist = entry;
         _currentTrackIndex = 0;
 
-        // Bắt đầu phát playlist
-        _playlistCoroutine = StartCoroutine(PlaylistCoroutine());
+        // Bắt đầu phát playlist với UniTask
+        _playlistCts = new CancellationTokenSource();
+        PlaylistTask(_playlistCts.Token).Forget();
     }
 
     /// <summary>
-    /// Coroutine quản lý Playlist (tự động chuyển bài)
+    /// UniTask quản lý Playlist (tự động chuyển bài).
+    /// OPTIMIZED: Thay thế Coroutine để giảm GC allocation.
     /// </summary>
-    private IEnumerator PlaylistCoroutine()
+    private async UniTaskVoid PlaylistTask(CancellationToken token)
     {
-        while (_currentPlaylist != null && _currentPlaylist.Clips.Count > 0)
+        try
         {
-            // Chọn track
-            AudioClip clip;
-            if (_currentPlaylist.Randomize)
+            while (_currentPlaylist != null && _currentPlaylist.Clips.Count > 0)
             {
-                // Random
-                _currentTrackIndex = Random.Range(0, _currentPlaylist.Clips.Count);
-                clip = _currentPlaylist.Clips[_currentTrackIndex];
+                // Chọn track
+                AudioClip clip;
+                if (_currentPlaylist.Randomize)
+                {
+                    // Random
+                    _currentTrackIndex = Random.Range(0, _currentPlaylist.Clips.Count);
+                    clip = _currentPlaylist.Clips[_currentTrackIndex];
+                }
+                else
+                {
+                    // Tuần tự
+                    clip = _currentPlaylist.Clips[_currentTrackIndex];
+                }
+
+                if (clip == null)
+                {
+                    Debug.LogWarning($"[AudioManager] Clip tại index {_currentTrackIndex} là null!");
+                    _currentTrackIndex = (_currentTrackIndex + 1) % _currentPlaylist.Clips.Count;
+                    await UniTask.Yield(PlayerLoopTiming.Update, cancellationToken: token);
+                    continue;
+                }
+
+                // Phát nhạc
+                _musicSource.clip = clip;
+                _musicSource.Play();
+
+                // Chờ cho đến khi bài hát kết thúc (UniTask WaitWhile)
+                await UniTask.WaitWhile(() => _musicSource.isPlaying, cancellationToken: token);
+
+                // Chuyển track tiếp theo (nếu không random)
+                if (!_currentPlaylist.Randomize)
+                {
+                    _currentTrackIndex = (_currentTrackIndex + 1) % _currentPlaylist.Clips.Count;
+                }
+
+                // Delay nhỏ giữa các bài (tùy chọn)
+                await UniTask.Delay(500, cancellationToken: token);
             }
-            else
-            {
-                // Tuần tự
-                clip = _currentPlaylist.Clips[_currentTrackIndex];
-            }
-
-            if (clip == null)
-            {
-                Debug.LogWarning($"[AudioManager] Clip tại index {_currentTrackIndex} là null!");
-                _currentTrackIndex = (_currentTrackIndex + 1) % _currentPlaylist.Clips.Count;
-                yield return null;
-                continue;
-            }
-
-            // Phát nhạc
-            _musicSource.clip = clip;
-            _musicSource.Play();
-
-            // Chờ cho đến khi bài hát kết thúc
-            yield return new WaitWhile(() => _musicSource.isPlaying);
-
-            // Chuyển track tiếp theo (nếu không random)
-            if (!_currentPlaylist.Randomize)
-            {
-                _currentTrackIndex = (_currentTrackIndex + 1) % _currentPlaylist.Clips.Count;
-            }
-
-            // Delay nhỏ giữa các bài (tùy chọn)
-            yield return new WaitForSeconds(0.5f);
+        }
+        catch (System.OperationCanceledException)
+        {
+            // Task bị cancel (bình thường khi đổi nhạc hoặc stop)
         }
     }
 
     /// <summary>
     /// Dừng nhạc nền ngay lập tức (không fade).
+    /// OPTIMIZED: Cancel UniTask thay vì StopCoroutine.
     /// </summary>
     public void StopMusic()
     {
-        // Stop playlist coroutine
-        if (_playlistCoroutine != null)
-        {
-            StopCoroutine(_playlistCoroutine);
-            _playlistCoroutine = null;
-        }
+        // Cancel playlist task
+        _playlistCts?.Cancel();
+        _playlistCts?.Dispose();
+        _playlistCts = null;
 
-        // Stop fade coroutine (nếu đang chạy)
-        if (_fadeCoroutine != null)
-        {
-            StopCoroutine(_fadeCoroutine);
-            _fadeCoroutine = null;
-        }
+        // Cancel fade task (nếu đang chạy)
+        _fadeCts?.Cancel();
+        _fadeCts?.Dispose();
+        _fadeCts = null;
 
         _musicSource.Stop();
         _currentMusicType = SoundType.None;
-        _currentPlaylist = null;
-
         _currentPlaylist = null;
     }
 
     /// <summary>
     /// Fade out và dừng nhạc.
+    /// OPTIMIZED: Sử dụng UniTask thay vì Coroutine.
     /// </summary>
     public void FadeOutAndStop()
     {
-        if (_fadeCoroutine != null)
-        {
-            StopCoroutine(_fadeCoroutine);
-        }
+        // Cancel fade task cũ (nếu đang chạy)
+        _fadeCts?.Cancel();
+        _fadeCts?.Dispose();
 
-        _fadeCoroutine = StartCoroutine(FadeOutCoroutine());
+        // Start fade task mới
+        _fadeCts = new CancellationTokenSource();
+        FadeOutTask(_fadeCts.Token).Forget();
     }
 
-    private IEnumerator FadeOutCoroutine()
+    /// <summary>
+    /// UniTask quản lý fade out effect.
+    /// </summary>
+    private async UniTaskVoid FadeOutTask(CancellationToken token)
     {
-        float startVolume = _musicSource.volume;
-        float elapsed = 0f;
-
-        while (elapsed < _fadeDuration)
+        try
         {
-            elapsed += Time.unscaledDeltaTime;
-            _musicSource.volume = Mathf.Lerp(startVolume, 0f, elapsed / _fadeDuration);
-            yield return null;
+            float startVolume = _musicSource.volume;
+            float elapsed = 0f;
+
+            while (elapsed < _fadeDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                _musicSource.volume = Mathf.Lerp(startVolume, 0f, elapsed / _fadeDuration);
+
+                // Yield frame (tương đương yield return null)
+                await UniTask.Yield(PlayerLoopTiming.Update, cancellationToken: token);
+            }
+
+            _musicSource.volume = 0f;
+            StopMusic();
+
+            // Khôi phục volume
+            _musicSource.volume = GetMusicVolume();
         }
-
-        _musicSource.volume = 0f;
-        StopMusic();
-
-        // Khôi phục volume
-        _musicSource.volume = GetMusicVolume();
-
-        _fadeCoroutine = null;
+        catch (System.OperationCanceledException)
+        {
+            // Task bị cancel
+        }
     }
 
     /// <summary>
@@ -343,6 +372,40 @@ public class AudioManager : MonoBehaviour
 
         float volume = entry.Volume;
         _sfxSource.PlayOneShot(clip, volume);
+    }
+
+    /// <summary>
+    /// Phát SFX với DEBOUNCE (dùng cho Slider preview).
+    /// Nếu gọi liên tục, chỉ phát 1 lần sau khi ngừng 200ms.
+    /// </summary>
+    public void PlaySFXDemo(SoundType type)
+    {
+        // Cancel task demo SFX cũ (nếu đang chạy)
+        _demoSfxCts?.Cancel();
+        _demoSfxCts?.Dispose();
+
+        // Tạo token mới và gọi async
+        _demoSfxCts = new CancellationTokenSource();
+        PlaySFXDemoAsync(type, _demoSfxCts.Token).Forget();
+    }
+
+    /// <summary>
+    /// UniTask delay 200ms trước khi phát SFX (debounce logic).
+    /// </summary>
+    private async UniTaskVoid PlaySFXDemoAsync(SoundType type, CancellationToken token)
+    {
+        try
+        {
+            // Chờ 200ms (debounce)
+            await UniTask.Delay(200, cancellationToken: token);
+
+            // Nếu không bị cancel, phát SFX
+            PlaySFX(type);
+        }
+        catch (System.OperationCanceledException)
+        {
+            // Task bị cancel (bình thường khi kéo slider liên tục)
+        }
     }
 
     /// <summary>

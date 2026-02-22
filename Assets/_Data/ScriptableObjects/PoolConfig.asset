@@ -23,10 +23,10 @@ MonoBehaviour:
     SerializationNodes: []
   pools:
   - poolType: 100
-    prefab: {fileID: 3726438337959669426, guid: b136a3653fabfc14083683c60a663fcc,
+    prefab: {fileID: 5502353385951206104, guid: 47b52cfb5113f084ca879424d9b8a582,
       type: 3}
-    initialSize: 10
-    maxSize: 50
+    initialSize: 50
+    maxSize: 200
     parentName: Pool_Enemy
   - poolType: 150
     prefab: {fileID: 1398463576221952648, guid: 91a3e390543ba3c479c2675ef211e906,
@@ -51,3 +51,55 @@ MonoBehaviour:
     initialSize: 10
     maxSize: 50
     parentName: Pool_TowerWind
+  - poolType: 303
+    prefab: {fileID: 9187790874839322023, guid: 6edfc3ce1a444ff46b4937ba67344e2d,
+      type: 3}
+    initialSize: 50
+    maxSize: 200
+    parentName: Pool_VFX
+  - poolType: 210
+    prefab: {fileID: 4277301864573041193, guid: 2abe561ffe22ec547a30c2ccc23b9515,
+      type: 3}
+    initialSize: 50
+    maxSize: 200
+    parentName: Pool_Projectiles
+  - poolType: 211
+    prefab: {fileID: 6847505873530703699, guid: 5901beebd9888a74faa14475461b7a7e,
+      type: 3}
+    initialSize: 50
+    maxSize: 200
+    parentName: Pool_Projectiles
+  - poolType: 212
+    prefab: {fileID: 786950347941501196, guid: 42ef0745bbbec754b9bac41137e93ed8, type: 3}
+    initialSize: 50
+    maxSize: 200
+    parentName: Pool_Projectiles
+  - poolType: 213
+    prefab: {fileID: 8661727544743251676, guid: 0201dd34ff9818648b90ddc755ff02de,
+      type: 3}
+    initialSize: 50
+    maxSize: 200
+    parentName: Pool_Projectiles
+  - poolType: 310
+    prefab: {fileID: 1303273384153160760, guid: 590e84748f9e08a44a62c3800fa97ba7,
+      type: 3}
+    initialSize: 50
+    maxSize: 200
+    parentName: Pool_VFX
+  - poolType: 311
+    prefab: {fileID: 2329285200485246071, guid: 67db2beb54ba83b42a69fcd1e9857f18,
+      type: 3}
+    initialSize: 50
+    maxSize: 200
+    parentName: Pool_VFX
+  - poolType: 312
+    prefab: {fileID: 785695213960471556, guid: 79227e4cfabba8348b296f33057b98d6, type: 3}
+    initialSize: 50
+    maxSize: 200
+    parentName: Pool_VFX
+  - poolType: 313
+    prefab: {fileID: 5090277830460507135, guid: 0c3e194a791983145bf1ed710fe6a197,
+      type: 3}
+    initialSize: 50
+    maxSize: 200
+    parentName: Pool_VFX

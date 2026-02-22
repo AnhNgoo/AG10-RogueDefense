@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,10 +8,37 @@ using Sirenix.OdinInspector;
 /// <summary>
 /// Quản lý việc spawn quái theo wave (đợt).
 /// Hỗ trợ Object Pooling và cơ chế Staggered Spawning (Spawn rải rác).
-/// Refactored with proper Odin Inspector grouping and strict Object Pooling.
+/// EVENTS: OnWaveStarted, OnWaveCompleted để đồng bộ UI/Gameplay (ví dụ: ẩn Expand Nodes khi đang combat).
 /// </summary>
 public class EnemySpawner : MonoBehaviour
 {
+    #region Wave Events
+
+    /// <summary>
+    /// Event phát khi Wave bắt đầu (quái bắt đầu spawn).
+    /// Sử dụng: ChunkExpandNode ẩn Canvas để ngăn player mở map khi đang combat.
+    /// </summary>
+    public static event Action OnWaveStarted;
+
+    /// <summary>
+    /// Event phát khi Wave kết thúc (tất cả quái đã chết hết).
+    /// Sử dụng: ChunkExpandNode hiện Canvas trở lại để cho phép mở rộng map.
+    /// </summary>
+    public static event Action OnWaveCompleted;
+
+    /// <summary>
+    /// Số lượng enemy đang sống (tăng khi spawn, giảm khi chết).
+    /// Dùng để track khi nào tất cả quái chết hết thì bắn OnWaveCompleted.
+    /// </summary>
+    public static int ActiveEnemies = 0;
+
+    /// <summary>
+    /// Trạng thái Wave đang active hay không (true = đang combat, false = đã xong wave).
+    /// Dùng để đồng bộ UI Expand Nodes được spawn ra giữa wave.
+    /// </summary>
+    public static bool IsWaveActive { get; private set; } = false;
+
+    #endregion
     #region Dependencies
 
     // Dependency Injection variables
@@ -75,6 +103,10 @@ public class EnemySpawner : MonoBehaviour
 
     private Coroutine spawnCoroutine;
 
+    // Flag đánh dấu wave hiện tại đã spawn xong chưa
+    private bool hasFinishedSpawning = false;
+    private bool hasTriggeredWaveCompleted = false; // Tránh bắn nhiều lần
+
     #endregion
 
     #region Initialization
@@ -92,6 +124,41 @@ public class EnemySpawner : MonoBehaviour
         this.visualizedCoords = visualizedCoords;
 
         Debug.Log("[EnemySpawner] ✓ Initialized successfully.");
+    }
+
+    /// <summary>
+    /// Start: Bắn OnWaveCompleted ngay khi game bắt đầu để UI Expand Nodes hiển thị.
+    /// Khắc phục vấn đề: Node được sinh ra trước khi có wave nào kết thúc sẽ không hiện Canvas.
+    /// </summary>
+    private void Start()
+    {
+        // Bắn event OnWaveCompleted để đánh thức tất cả UI Expand Nodes
+        OnWaveCompleted?.Invoke();
+    }
+
+    /// <summary>
+    /// Kiểm tra khi nào Wave thực sự kết thúc (spawn xong VÀ tất cả enemy chết hết).
+    /// </summary>
+    private void Update()
+    {
+        // Chỉ check khi đã spawn xong và chưa bắn OnWaveCompleted
+        if (hasFinishedSpawning && !hasTriggeredWaveCompleted)
+        {
+            // Nếu tất cả enemy đã chết -> Bắn event OnWaveCompleted
+            if (ActiveEnemies <= 0)
+            {
+                Debug.Log($"[EnemySpawner] === WAVE {currentWaveIndex - 1} HOÀN THÀNH === (Tất cả enemy đã chết)");
+
+                // Phát event Wave kết thúc
+                OnWaveCompleted?.Invoke();
+
+                // Cập nhật trạng thái Wave: Không còn active
+                IsWaveActive = false;
+
+                // Đánh dấu đã bắn event
+                hasTriggeredWaveCompleted = true;
+            }
+        }
     }
 
     #endregion
@@ -112,6 +179,13 @@ public class EnemySpawner : MonoBehaviour
             Debug.LogWarning("[EnemySpawner] Wave đang chạy! Bỏ qua lệnh spawn mới.");
             return;
         }
+
+        // Reset flags cho wave mới
+        hasFinishedSpawning = false;
+        hasTriggeredWaveCompleted = false;
+
+        // CRITICAL FIX: Reset số lượng enemy đang active về 0 (đề phòng lỗi dính số từ wave cũ)
+        ActiveEnemies = 0;
 
         // Validate
         if (GameObject.Find("WorldMapManager")?.GetComponent<ChunkData>() is ChunkData result)
@@ -189,6 +263,12 @@ public class EnemySpawner : MonoBehaviour
     {
         isSpawning = true;
 
+        // Phát event Wave bắt đầu
+        OnWaveStarted?.Invoke();
+
+        // Cập nhật trạng thái Wave: Đang active
+        IsWaveActive = true;
+
         // Tính phân phối công bằng cho từng chunk
         int baseCount = enemyCount / endChunks.Count;
         int remainder = enemyCount % endChunks.Count;
@@ -232,10 +312,14 @@ public class EnemySpawner : MonoBehaviour
             yield return new WaitForSeconds(spawnInterval);
         }
 
-        // Wave hoàn thành ->
+        // Wave hoàn thành spawn
         isSpawning = false;
-        currentWaveIndex++; // Tăng wave cho đợt sau
-        Debug.Log($"[EnemySpawner] === WAVE {currentWaveIndex - 1} HOÀN THÀNH ===");
+        currentWaveIndex++;
+
+        // Đánh dấu đã spawn xong (Update() sẽ check ActiveEnemies để bắn OnWaveCompleted)
+        hasFinishedSpawning = true;
+
+        Debug.Log($"[EnemySpawner] Spawned {spawnedCount}/{enemyCount} enemies. Đang chờ chúng chết hết...");
     }
 
     #endregion
@@ -278,7 +362,7 @@ public class EnemySpawner : MonoBehaviour
         }
 
         // Chọn ngẫu nhiên 1 exit từ các exit hợp lệ
-        Vector2Int selectedExit = validExits[Random.Range(0, validExits.Count)];
+        Vector2Int selectedExit = validExits[UnityEngine.Random.Range(0, validExits.Count)];
 
         // Tính path từ exit này về Home (0,0)
         List<Vector3> pathToHome = pathfinder.CalculatePathToHome(chunk, selectedExit);
@@ -298,6 +382,11 @@ public class EnemySpawner : MonoBehaviour
             if (enemyScript != null)
             {
                 enemyScript.Setup(pathToHome);
+
+                // Tăng số lượng enemy đang active
+                ActiveEnemies++;
+
+                Debug.Log($"[EnemySpawner] Spawned enemy at {spawnPosition}. ActiveEnemies: {ActiveEnemies}");
             }
         }
         else
