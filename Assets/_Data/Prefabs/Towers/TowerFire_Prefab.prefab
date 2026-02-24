@@ -48,9 +48,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 42daf24451df7bb47821b7f128ee1060, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _towerName: Tower
-  _description: 
-  _buildCost: 100
+  _towerName: Crimson Shroom
+  _description: Hurls explosive fire spores that ignite enemies, dealing area-of-effect
+    and continuous burn damage.
+  _buildCost: 150
+  _upgradeCost: 150
   _attackRange: 5
   _damage: 10
   _fireRate: 1

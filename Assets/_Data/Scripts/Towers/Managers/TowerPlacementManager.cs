@@ -251,6 +251,7 @@ public class TowerPlacementManager : SerializedMonoBehaviour
     /// <summary>
     /// Xác nhận đặt tháp tại vị trí đã chọn (2-Step Placement).
     /// Gọi bởi TowerGhost.OnConfirmClicked() khi player bấm nút Confirm (✓).
+    /// QUAN TRỌNG: TRỪ TIỀN trước khi đặt tháp.
     /// </summary>
     public void ConfirmPlacement()
     {
@@ -267,7 +268,34 @@ public class TowerPlacementManager : SerializedMonoBehaviour
             return;
         }
 
-        PlaceTower(_lastValidPosition, _lastValidTileCoord);
+        // Lấy thông tin cấu hình tháp đang chọn
+        if (_configCache.TryGetValue(_selectedTowerType, out TowerPlacementData config))
+        {
+            // Lấy giá tiền xây dựng từ Tower Prefab
+            int buildCost = config.towerPrefab != null ? config.towerPrefab.BuildCost : 0;
+
+            // KIỂM TRA VÀ TRỪ TIỀN TRƯỚC KHI ĐẶT THÁP
+            if (CurrencyManager.Instance != null && CurrencyManager.Instance.TrySpendGold(buildCost))
+            {
+                // Đủ tiền -> Đặt tháp
+                PlaceTower(_lastValidPosition, _lastValidTileCoord);
+                Debug.Log($"[TowerPlacementManager] Đặt tháp {_selectedTowerType} thành công! Chi phí: {buildCost} Gold");
+            }
+            else
+            {
+                // Không đủ tiền (có thể bị trừ tiền ở chỗ khác trong lúc placement)
+                Debug.LogWarning($"[TowerPlacementManager] Không đủ tiền để xây {_selectedTowerType}! Cần: {buildCost} Gold");
+
+                // (Optional) Hiển thị feedback UI cho người chơi
+                // FindObjectOfType<CurrencyUI>()?.ShowInsufficientFeedback();
+            }
+        }
+        else
+        {
+            Debug.LogError($"[TowerPlacementManager] Lỗi cấu hình: Không tìm thấy {_selectedTowerType} trong _configCache!");
+        }
+
+        // Dù thành công hay thất bại cũng kết thúc chế độ placement
         CancelPlacement();
     }
 

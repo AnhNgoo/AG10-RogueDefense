@@ -58,6 +58,11 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable, IDamageable
     public PoolType enemyType = PoolType.EnemyBasic;
 
     [BoxGroup("Stats")]
+    [LabelWidth(120), SuffixLabel("Gold")]
+    [Tooltip("Số vàng nhận được khi tiêu diệt enemy này")]
+    [SerializeField] protected int _goldReward = 10;
+
+    [BoxGroup("Stats")]
     [Required]
     [Tooltip("Component quản lý máu (MANDATORY)")]
     [SerializeField] protected HealthComponent healthComponent;
@@ -130,6 +135,24 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable, IDamageable
 
         // Hook: Cho subclass custom logic khi spawn
         OnSpawnComplete();
+    }
+
+    /// <summary>
+    /// ĐẶT MÁU CUSTOM cho Enemy (từ WaveManager - HP scaling theo wave).
+    /// PHẢI GỌI SAU Setup() nhưng TRƯỚC khi bắt đầu di chuyển.
+    /// </summary>
+    /// <param name="maxHP">Máu tối đa (đã tính bởi WaveManager)</param>
+    public void SetCustomHealth(float maxHP)
+    {
+        if (healthComponent != null)
+        {
+            healthComponent.Initialize(maxHP); // Overload nhận customMaxHealth
+            Debug.Log($"[{GetType().Name}] Custom HP set: {maxHP:F0}");
+        }
+        else
+        {
+            Debug.LogError($"[{GetType().Name}] HealthComponent is NULL! Cannot set custom HP.");
+        }
     }
 
     /// <summary>
@@ -246,11 +269,19 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable, IDamageable
 
     /// <summary>
     /// Hook Method: Override để xử lý logic khi enemy đến Base.
+    /// GÂY SÁT THƯƠNG cho Nhà Chính.
     /// </summary>
     protected virtual void OnReachBase()
     {
-        // TODO: Gọi GameManager để trừ máu Player
-        // GameManager.Instance.TakeDamage(damageAmount);
+        // Gây sát thương cho Nhà Chính (OBSERVER PATTERN: UI tự động cập nhật)
+        if (BaseHealthManager.Instance != null)
+        {
+            BaseHealthManager.Instance.TakeDamage(1);
+        }
+        else
+        {
+            Debug.LogWarning("[EnemyBase] BaseHealthManager không tồn tại! Không thể trừ máu Base.");
+        }
     }
 
     #endregion
@@ -308,6 +339,12 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable, IDamageable
             _isCountedAsDead = true;
             EnemySpawner.ActiveEnemies--;
             Debug.Log($"[{GetType().Name}] Chết! ActiveEnemies giảm xuống: {EnemySpawner.ActiveEnemies}");
+
+            // THƯỞNG TIỀN cho người chơi khi tiêu diệt enemy
+            if (CurrencyManager.Instance != null)
+            {
+                CurrencyManager.Instance.AddGold(_goldReward);
+            }
         }
 
         // Hook: Cho subclass xử lý logic khi chết (spawn VFX, drop loot, etc.)

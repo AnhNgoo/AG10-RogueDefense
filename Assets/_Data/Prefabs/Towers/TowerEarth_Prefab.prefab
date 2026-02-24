@@ -237,15 +237,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a91686ce6f31cc04a9139234f1ee3b4e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _towerName: Tower
-  _description: 
-  _buildCost: 100
+  _towerName: Granite Fortress
+  _description: Drops massive boulders that crush and stun targets. Acts as a defensive
+    anchor, buffing nearby towers.
+  _buildCost: 200
+  _upgradeCost: 150
   _attackRange: 4
   _damage: 10
   _fireRate: 1
   _muzzlePoint: {fileID: 3480785068936407353}
   _visualTransform: {fileID: 4923985972834635798}
-  visualRotationOffset: {x: 0, y: 180, z: 0}
+  visualRotationOffset: {x: 0, y: -90, z: 0}
   turnSpeed: 10
   bulletSpeed: 20
   bulletType: 212

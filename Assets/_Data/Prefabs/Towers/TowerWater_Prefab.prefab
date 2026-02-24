@@ -48,9 +48,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5bbc6b02a330143448b7412dffdfc437, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _towerName: Tower
-  _description: 
+  _towerName: Hydro Cone
+  _description: Fires chilling water projectiles to slow down enemy advances. Evolves
+    into a continuous freezing beam.
   _buildCost: 100
+  _upgradeCost: 150
   _attackRange: 7
   _damage: 10
   _fireRate: 1

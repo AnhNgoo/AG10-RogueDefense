@@ -27,6 +27,13 @@ public class EnemySpawner : MonoBehaviour
     public static event Action OnWaveCompleted;
 
     /// <summary>
+    /// Event phát khi Wave index thay đổi (cho UI cập nhật hiển thị Wave).
+    /// Parameters: currentWave, maxWaves.
+    /// OBSERVER PATTERN: WaveUI subscribe vào event này để tự động cập nhật.
+    /// </summary>
+    public static event Action<int, int> OnWaveIndexChanged;
+
+    /// <summary>
     /// Số lượng enemy đang sống (tăng khi spawn, giảm khi chết).
     /// Dùng để track khi nào tất cả quái chết hết thì bắn OnWaveCompleted.
     /// </summary>
@@ -48,38 +55,15 @@ public class EnemySpawner : MonoBehaviour
 
     #endregion
 
-    #region Wave Configuration
+    #region Spawn Configuration
 
-    [Title("Wave Configuration", "Settings for spawning waves", TitleAlignment = TitleAlignments.Centered)]
-
-    [BoxGroup("Current State")]
-    [Tooltip("Wave hiện tại (bắt đầu từ 1)")]
-    [LabelText("Current Wave")]
-    public int currentWaveIndex = 1;
+    [Title("Spawn Execution Settings", "EnemySpawner chỉ thực thi spawn, không tính toán", TitleAlignment = TitleAlignments.Centered)]
 
     [BoxGroup("Spawn Settings")]
-    [HorizontalGroup("Spawn Settings/Main")]
     [Range(0.1f, 3f)]
     [SuffixLabel("seconds")]
     [Tooltip("Thời gian delay giữa các lần spawn (giây) - Staggering")]
     public float spawnInterval = 0.5f;
-
-    [HorizontalGroup("Spawn Settings/Main")]
-    [Tooltip("Loại Enemy spawn cho Wave này")]
-    public PoolType enemyType = PoolType.EnemyBasic;
-
-    [BoxGroup("Balancing")]
-    [HorizontalGroup("Balancing/Params")]
-    [Tooltip("Hệ số nhân cho số lượng quái (Wave scaling từ Wave 2+)")]
-    [Range(1f, 3f)]
-    [LabelText("Scaling Multiplier")]
-    public float waveScalingMultiplier = 1.5f;
-
-    [HorizontalGroup("Balancing/Params")]
-    [Tooltip("Số quái cố định cho Wave 1 (Tutorial)")]
-    [Range(1, 5)]
-    [LabelText("Wave 1 Count")]
-    public int wave1EnemyCount = 1;
 
     #endregion
 
@@ -147,7 +131,8 @@ public class EnemySpawner : MonoBehaviour
             // Nếu tất cả enemy đã chết -> Bắn event OnWaveCompleted
             if (ActiveEnemies <= 0)
             {
-                Debug.Log($"[EnemySpawner] === WAVE {currentWaveIndex - 1} HOÀN THÀNH === (Tất cả enemy đã chết)");
+                int completedWave = WaveManager.Instance != null ? WaveManager.Instance.CurrentWave : 0;
+                Debug.Log($"[EnemySpawner] === WAVE {completedWave} HOÀN THÀNH === (Tất cả enemy đã chết)");
 
                 // Phát event Wave kết thúc
                 OnWaveCompleted?.Invoke();
@@ -166,13 +151,15 @@ public class EnemySpawner : MonoBehaviour
     #region Public API
 
     /// <summary>
-    /// Bắt đầu Wave mới (gọi từ WorldMapManager khi Expand chunk).
+    /// Thực thi spawn wave (KHÔNG tính toán - nhận lệnh từ WaveManager).
+    /// SOLID: EnemySpawner chỉ làm "Tay Chân", WaveManager là "Bộ Não".
+    /// NÂNG CẤP: Hỗ trợ spawn nhiều loại quái khác nhau trong cùng 1 wave.
     /// </summary>
-    [Button(ButtonSizes.Large), PropertyOrder(1)]
-    [BoxGroup("Actions", CenterLabel = true)]
-    [GUIColor(0.4f, 1f, 0.4f)]
-    [DisableInEditorMode]
-    public void StartNextWave()
+    /// <param name="endChunks">Danh sách chunk endpoints để spawn</param>
+    /// <param name="enemyCount">Số lượng quái (đã tính bởi WaveManager)</param>
+    /// <param name="baseWaveHP">Base HP của wave (chưa nhân hpMultiplier)</param>
+    /// <param name="validConfigs">Các loại quái có thể spawn (với weight + hpMultiplier)</param>
+    public void ExecuteSpawnWave(List<ChunkData> endChunks, int enemyCount, float baseWaveHP, List<EnemySpawnConfig> validConfigs)
     {
         if (isSpawning)
         {
@@ -180,39 +167,73 @@ public class EnemySpawner : MonoBehaviour
             return;
         }
 
+        if (endChunks == null || endChunks.Count == 0)
+        {
+            Debug.LogWarning("[EnemySpawner] Không có endChunks để spawn!");
+            return;
+        }
+
+        if (validConfigs == null || validConfigs.Count == 0)
+        {
+            Debug.LogError("[EnemySpawner] Không có loại quái nào hợp lệ để spawn!");
+            return;
+        }
+
         // Reset flags cho wave mới
         hasFinishedSpawning = false;
         hasTriggeredWaveCompleted = false;
 
-        // CRITICAL FIX: Reset số lượng enemy đang active về 0 (đề phòng lỗi dính số từ wave cũ)
+        // CRITICAL FIX: Reset số lượng enemy đang active về 0
         ActiveEnemies = 0;
-
-        // Validate
-        if (GameObject.Find("WorldMapManager")?.GetComponent<ChunkData>() is ChunkData result)
-        {
-            // Fallback logic if needed, maintained from previous version
-        }
-
-        // Tìm điểm spawn
-        List<ChunkData> endChunks = GetAllEndChunks();
-
-        if (endChunks.Count == 0)
-        {
-            Debug.LogWarning("[EnemySpawner] Không tìm thấy điểm spawn (EndChunk)!");
-            return;
-        }
-
-        // Tính số lượng quái
-        int enemyCount = CalculateEnemyCountForWave(endChunks.Count);
 
         // Lưu thống kê
         lastWaveEnemyCount = enemyCount;
         lastWaveEndChunks = endChunks.Count;
 
-        Debug.Log($"[EnemySpawner] === WAVE {currentWaveIndex} BẮT ĐẦU === ({enemyCount} quái, {endChunks.Count} cổng spawn)");
+        Debug.Log($"[EnemySpawner] Executing spawn: {enemyCount} enemies, BaseHP={baseWaveHP:F0}, Types={validConfigs.Count}, Gates={endChunks.Count}");
+
+        // BẮN EVENT: Cập nhật Wave Index cho UI (OBSERVER PATTERN)
+        int currentWave = WaveManager.Instance != null ? WaveManager.Instance.CurrentWave : 1;
+        int maxWaves = WaveManager.Instance != null ? WaveManager.Instance.MaxWaves : 10;
+        OnWaveIndexChanged?.Invoke(currentWave, maxWaves);
 
         // Bắt đầu Coroutine spawn
-        spawnCoroutine = StartCoroutine(SpawnWaveCoroutine(endChunks, enemyCount));
+        spawnCoroutine = StartCoroutine(SpawnWaveCoroutine(endChunks, enemyCount, baseWaveHP, validConfigs));
+    }
+
+    /// <summary>
+    /// Lấy danh sách tất cả End Chunks (để WaveManager có thể gọi).
+    /// REFACTORED: Public để WorldMapManager có thể truy cập.
+    /// </summary>
+    public List<ChunkData> GetAllEndChunks()
+    {
+        List<ChunkData> endChunks = new List<ChunkData>();
+
+        foreach (Vector2Int visCoord in visualizedCoords)
+        {
+            if (!worldChunks.TryGetValue(visCoord, out ChunkData visChunk)) continue;
+
+            bool hasUnconnectedExit = false;
+
+            foreach (Vector2Int exitPoint in visChunk.exitPoints)
+            {
+                Vector2Int direction = pathfinder.GetDirectionFromEdgeTile(exitPoint);
+                Vector2Int neighborCoord = visCoord + direction;
+
+                if (!visualizedCoords.Contains(neighborCoord))
+                {
+                    hasUnconnectedExit = true;
+                    break;
+                }
+            }
+
+            if (hasUnconnectedExit)
+            {
+                endChunks.Add(visChunk);
+            }
+        }
+
+        return endChunks;
     }
 
     /// <summary>
@@ -236,30 +257,13 @@ public class EnemySpawner : MonoBehaviour
 
     #endregion
 
-    #region Wave Logic
-
-    /// <summary>
-    /// Giữ nguyên công thức tính số lượng quái.
-    /// </summary>
-    private int CalculateEnemyCountForWave(int activeEndChunksCount)
-    {
-        // Wave 1: Cố định (Tutorial)
-        if (currentWaveIndex == 1)
-        {
-            return wave1EnemyCount;
-        }
-
-        // Wave 2+: Công thức mới (base + wave * scaling)
-        float rawCount = 1.5f + (currentWaveIndex * 1.2f);
-        int totalCount = Mathf.RoundToInt(rawCount);
-
-        return Mathf.Max(totalCount, 1); // Tối thiểu 1 quái
-    }
+    #region Wave Execution Logic
 
     /// <summary>
     /// Coroutine spawn quái từ từ (Round Robin Interleave).
+    /// NÂNG CẤP: Chọn loại quái ngẫu nhiên theo weight trước mỗi lần spawn.
     /// </summary>
-    private IEnumerator SpawnWaveCoroutine(List<ChunkData> endChunks, int enemyCount)
+    private IEnumerator SpawnWaveCoroutine(List<ChunkData> endChunks, int enemyCount, float baseWaveHP, List<EnemySpawnConfig> validConfigs)
     {
         isSpawning = true;
 
@@ -305,7 +309,14 @@ public class EnemySpawner : MonoBehaviour
         int spawnedCount = 0;
         foreach (ChunkData spawnChunk in spawnQueue)
         {
-            SpawnEnemyAtChunk(spawnChunk);
+            // CHỌN LOẠI QUÁI NGẪU NHIÊN DỰA TRÊN WEIGHT (Weighted Random Selection)
+            EnemySpawnConfig selectedConfig = SelectRandomEnemyByWeight(validConfigs);
+
+            // TÍNH HP THỰC TẾ (Base HP * HP Multiplier của loại quái)
+            float finalHP = baseWaveHP * selectedConfig.hpMultiplier;
+
+            // Spawn quái với loại và HP đã chọn
+            SpawnEnemyAtChunk(spawnChunk, selectedConfig.enemyType, finalHP);
             spawnedCount++;
 
             // Delay trước khi spawn con tiếp theo
@@ -314,7 +325,6 @@ public class EnemySpawner : MonoBehaviour
 
         // Wave hoàn thành spawn
         isSpawning = false;
-        currentWaveIndex++;
 
         // Đánh dấu đã spawn xong (Update() sẽ check ActiveEnemies để bắn OnWaveCompleted)
         hasFinishedSpawning = true;
@@ -327,10 +337,41 @@ public class EnemySpawner : MonoBehaviour
     #region Spawn Methods
 
     /// <summary>
-    /// Spawn 1 Enemy tại MỘT ExitPoint ngẫu nhiên của chunk.
-    /// Dùng Object Pool Manager (Enum-Based).
+    /// Chọn ngẫu nhiên 1 loại quái dựa trên trọng số (Weight-Based Random Selection).
+    /// VÍ DỤ: Basic(weight=10) + Fast(weight=3) -> Tổng=13 -> 10/13 cơ hội Basic, 3/13 cơ hội Fast.
     /// </summary>
-    private void SpawnEnemyAtChunk(ChunkData chunk)
+    private EnemySpawnConfig SelectRandomEnemyByWeight(List<EnemySpawnConfig> configs)
+    {
+        // Tính tổng weight
+        int totalWeight = 0;
+        foreach (var config in configs)
+        {
+            totalWeight += config.weight;
+        }
+
+        // Random 1 số từ 0 đến totalWeight
+        int randomValue = UnityEngine.Random.Range(0, totalWeight);
+
+        // Tìm config tương ứng
+        int cumulativeWeight = 0;
+        foreach (var config in configs)
+        {
+            cumulativeWeight += config.weight;
+            if (randomValue < cumulativeWeight)
+            {
+                return config;
+            }
+        }
+
+        // Fallback (không bao giờ xảy ra nếu logic đúng)
+        return configs[0];
+    }
+
+    /// <summary>
+    /// Spawn 1 Enemy tại MỘT ExitPoint ngẫu nhiên của chunk.
+    /// NÂNG CẤP: Nhận loại quái và HP cụ thể cho từng con.
+    /// </summary>
+    private void SpawnEnemyAtChunk(ChunkData chunk, PoolType enemyType, float finalHP)
     {
         // Kiểm tra chunk có exitPoints không
         if (chunk.exitPoints == null || chunk.exitPoints.Count == 0)
@@ -381,12 +422,16 @@ public class EnemySpawner : MonoBehaviour
             EnemyBase enemyScript = enemyObj.GetComponent<EnemyBase>();
             if (enemyScript != null)
             {
+                // ĐẶT MÁU CUSTOM (từ WaveManager) TRƯỚC KHI Setup
+                enemyScript.SetCustomHealth(finalHP);
+
+                // Setup path
                 enemyScript.Setup(pathToHome);
 
                 // Tăng số lượng enemy đang active
                 ActiveEnemies++;
 
-                Debug.Log($"[EnemySpawner] Spawned enemy at {spawnPosition}. ActiveEnemies: {ActiveEnemies}");
+                Debug.Log($"[EnemySpawner] Spawned {enemyType} at {spawnPosition}. HP={finalHP:F0}, ActiveEnemies: {ActiveEnemies}");
             }
         }
         else
@@ -395,47 +440,15 @@ public class EnemySpawner : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Tìm tất cả các "End Chunks" (chunks có exit trỏ ra vùng chưa mở).
-    /// </summary>
-    private List<ChunkData> GetAllEndChunks()
-    {
-        List<ChunkData> endChunks = new List<ChunkData>();
-
-        foreach (Vector2Int visCoord in visualizedCoords)
-        {
-            if (!worldChunks.TryGetValue(visCoord, out ChunkData visChunk)) continue;
-
-            bool hasUnconnectedExit = false;
-
-            foreach (Vector2Int exitPoint in visChunk.exitPoints)
-            {
-                Vector2Int direction = pathfinder.GetDirectionFromEdgeTile(exitPoint);
-                Vector2Int neighborCoord = visCoord + direction;
-
-                if (!visualizedCoords.Contains(neighborCoord))
-                {
-                    hasUnconnectedExit = true;
-                    break;
-                }
-            }
-
-            if (hasUnconnectedExit)
-            {
-                endChunks.Add(visChunk);
-            }
-        }
-
-        return endChunks;
-    }
-
     #endregion
 
     #region Helper
 
     private Color GetWaveProgressColor(float value)
     {
-        return Color.Lerp(Color.green, Color.red, Mathf.Clamp01(currentWaveIndex / 10f));
+        int currentWave = WaveManager.Instance != null ? WaveManager.Instance.CurrentWave : 1;
+        int maxWaves = WaveManager.Instance != null ? WaveManager.Instance.MaxWaves : 10;
+        return Color.Lerp(Color.green, Color.red, Mathf.Clamp01((float)currentWave / maxWaves));
     }
 
     private void OnDestroy()

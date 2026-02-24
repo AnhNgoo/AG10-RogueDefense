@@ -671,9 +671,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 746c0e16f6af9f24f986f7c66bf043df, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _towerName: 
-  _description: 
-  _buildCost: 100
+  _towerName: Cyclone Mortar
+  _description: Unleashes a rapid barrage of piercing wind blades. Highly lethal
+    against fast-moving and airborne swarms.
+  _buildCost: 200
+  _upgradeCost: 150
   _attackRange: 5
   _damage: 10
   _fireRate: 0.5

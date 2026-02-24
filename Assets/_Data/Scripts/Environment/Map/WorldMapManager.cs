@@ -336,11 +336,16 @@ public class WorldMapManager : SerializedMonoBehaviour
         UpdateExpandNodes();
 
         // ========================================
-        // SPAWN WAVE (DELEGATION TO ENEMYSPAWNER)
+        // SPAWN WAVE (DELEGATION TO WAVEMANAGER)
         // ========================================
-        if (enemySpawner != null)
+        if (enemySpawner != null && WaveManager.Instance != null)
         {
-            enemySpawner.StartNextWave(); // Delegation - Bắt đầu Wave mới
+            // Lấy danh sách End Chunks từ EnemySpawner
+            List<ChunkData> endChunks = enemySpawner.GetAllEndChunks();
+
+            // Gửi lệnh spawn wave cho WaveManager (SOLID: WaveManager = Brain, EnemySpawner = Executor)
+            // Dependency Injection: Pass enemySpawner reference để WaveManager không cần Singleton pattern
+            WaveManager.Instance.StartNextWave(endChunks, enemySpawner);
         }
 
         Debug.Log($"[WorldMapManager] ✓ Expanded chunk {chunkToExpand.chunkCoord}. Remaining hidden: {hiddenChunks.Count}");
@@ -610,6 +615,13 @@ public class WorldMapManager : SerializedMonoBehaviour
 
         // Spawn Expand Nodes tại các chunk có thể mở rộng
         UpdateExpandNodes();
+
+        // KHỞI TẠO WAVEMANAGER: Tính MaxWaves dựa trên số lượng hidden chunks
+        if (WaveManager.Instance != null)
+        {
+            WaveManager.Instance.Initialize(hiddenChunks.Count);
+            Debug.Log($"[WorldMapManager] ✓ WaveManager initialized with {hiddenChunks.Count} max waves.");
+        }
 
         Debug.Log($"[WorldMapManager] ✓ Base Chunk visualized. {hiddenChunks.Count} chunks hidden. Use 'Expand One Chunk' button to reveal.");
     }

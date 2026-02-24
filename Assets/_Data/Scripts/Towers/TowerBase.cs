@@ -36,6 +36,10 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
     [SerializeField] protected int _buildCost = 100;
 
     [BoxGroup("Stats")]
+    [Tooltip("Chi phí nâng cấp tháp lên cấp tiếp theo")]
+    [SerializeField] protected int _upgradeCost = 150;
+
+    [BoxGroup("Stats")]
     [Tooltip("Tầm bắn của tháp (Unity Units)")]
     [SerializeField] protected float _attackRange = 5f;
 
@@ -417,12 +421,30 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
 
     /// <summary>
     /// Callback khi player bấm nút Upgrade.
-    /// TODO: Implement nâng cấp tháp logic (tăng stats, trừ tiền).
+    /// Logic: Kiểm tra tiền, trừ tiền, nâng cấp stats.
     /// </summary>
     public void OnUpgradeClicked()
     {
-        Debug.Log($"[TowerBase] {_towerName} đã được nâng cấp!");
-        // TODO: Kiểm tra tiền, nâng cấp stats, trừ tiền
+        // Kiểm tra và trừ tiền
+        if (CurrencyManager.Instance != null && CurrencyManager.Instance.TrySpendGold(_upgradeCost))
+        {
+            // Nâng cấp thành công
+            Debug.Log($"[TowerBase] {_towerName} đã được nâng cấp thành công! Chi phí: {_upgradeCost} Gold");
+
+            // TODO: Implement logic nâng cấp stats (tăng damage, range, fire rate, etc.)
+            // _damage *= 1.5f;
+            // _attackRange += 1f;
+            // _fireRate *= 0.8f; // Fire nhanh hơn
+            // _upgradeCost = Mathf.RoundToInt(_upgradeCost * 1.5f); // Tăng giá nâng cấp lần sau
+        }
+        else
+        {
+            // Không đủ tiền
+            Debug.Log($"[TowerBase] Không đủ tiền nâng cấp {_towerName}! Cần: {_upgradeCost} Gold");
+
+            // Feedback UI (optional)
+            // Có thể gọi CurrencyUI.ShowInsufficientFeedback() nếu cần
+        }
     }
 
     /// <summary>
@@ -433,10 +455,13 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
     {
         // Tính tiền hoàn (50% BuildCost)
         int refund = Mathf.RoundToInt(_buildCost * 0.5f);
-        Debug.Log($"[TowerBase] {_towerName} đã được bán! Hoàn tiền: {refund}");
+        Debug.Log($"[TowerBase] {_towerName} đã được bán! Hoàn tiền: {refund} Gold");
 
-        // TODO: Thêm tiền vào Player Gold (cần tham chiếu ResourceManager hoặc GameManager)
-        // ResourceManager.Instance.AddGold(refund);
+        // Thêm tiền vào CurrencyManager
+        if (CurrencyManager.Instance != null)
+        {
+            CurrencyManager.Instance.AddGold(refund);
+        }
 
         // Giải phóng tile trong WorldMapManager
         if (WorldMapManager.Instance != null)
