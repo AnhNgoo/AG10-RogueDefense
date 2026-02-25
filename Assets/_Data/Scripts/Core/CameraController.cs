@@ -216,15 +216,24 @@ public class CameraController : MonoBehaviour
         }
 
         // Auto-align camera to map (wait 1 frame for map to generate)
-        if (_mapManager != null && _enableRotation)
-        {
-            Invoke(nameof(AlignCameraToMap), 0.1f);
-        }
+        // if (_mapManager != null && _enableRotation)
+        // {
+        //     Invoke(nameof(AlignCameraToMap), 0.1f);
+        // }
     }
 
     private void Update()
     {
         if (!_enableController) return;
+
+        if (Input.GetKeyDown(KeyCode.D))
+        {
+            RotateRight();
+        }
+        else if (Input.GetKeyDown(KeyCode.A))
+        {
+            RotateLeft();
+        }
 
         HandleInput();
     }

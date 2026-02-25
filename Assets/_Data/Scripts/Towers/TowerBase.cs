@@ -168,7 +168,8 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
         if (!_isActive) return;
 
         // XOAY NÒNG SÚNG BÁM THEO TARGET (Lerp mượt mà)
-        if (_currentTarget != null && !_currentTarget.IsDead && _visualTransform != null)
+        // CRITICAL: Kiểm tra cả activeInHierarchy để tránh xoay theo quái đã vào pool
+        if (_currentTarget != null && !_currentTarget.IsDead && _currentTarget.gameObject.activeInHierarchy && _visualTransform != null)
         {
             // Tính hướng từ nòng súng tới target (bỏ trục Y để không ngửa lên trời)
             Vector3 direction = _currentTarget.Position - _visualTransform.position;
@@ -205,11 +206,16 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
             // Tìm mục tiêu tốt nhất
             _currentTarget = GetBestTarget();
 
-            // Nếu có target hợp lệ -> Bắn
-            if (_currentTarget != null)
+            // CRITICAL: Kiểm tra cả activeInHierarchy trước khi bắn (tránh Ghost Bullet)
+            if (_currentTarget != null && !_currentTarget.IsDead && _currentTarget.gameObject.activeInHierarchy)
             {
                 Shoot(_currentTarget);
                 _fireTimer = 0f; // Reset timer
+            }
+            else
+            {
+                // Quái đã chết/vào pool giữa chừng -> Reset target
+                _currentTarget = null;
             }
         }
     }
@@ -333,31 +339,39 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
     /// <summary>
     /// Sequence xử lý sát thương sau khi đạn bay đến (PREDICTABLE HIT).
     /// Logic:
-    /// 1. Chờ hitTime giây (thời gian đạn bay).
-    /// 2. Kiểm tra target còn sống không.
-    /// 3. Nếu còn -> Gây sát thương và spawn VFX Hit.
+    /// 1. Lưu vị trí cuối cùng của quái (phòng trường hợp quái chết giữa chừng).
+    /// 2. Chờ hitTime giây (thời gian đạn bay).
+    /// 3. Kiểm tra target còn sống không.
+    /// 4. Nếu còn -> Gây sát thương và spawn VFX Hit.
+    /// 5. Nếu chết giữa chừng -> Spawn VFX "xịt" ở vị trí cuối cùng cho thật.
     /// </summary>
     private async UniTaskVoid HitTargetSequence(EnemyBase target, float hitTime)
     {
+        // CRITICAL: Lưu lại vị trí hiện tại của quái làm vị trí dự phòng (Ghost Bullet Fix)
+        Vector3 lastKnownPosition = target.Position;
+
         // Đợi thời gian đạn bay
         await UniTask.Delay(System.TimeSpan.FromSeconds(hitTime));
 
         // Kiểm tra target còn tồn tại và chưa chết
-        if (target == null || target.IsDead || !target.gameObject.activeInHierarchy)
+        if (target != null && !target.IsDead && target.gameObject.activeInHierarchy)
         {
-            // Target đã chết giữa chừng (bị Tower khác giết) -> Bỏ qua
-            return;
+            // GÂY SÁT THƯƠNG cho target
+            target.TakeDamage(_damage);
+
+            // SPAWN VFX HIT tại vị trí target
+            Vector3 hitPosition = target.Position;
+            ObjectPoolManager.Instance.Spawn(hitVFXType, hitPosition, Quaternion.identity);
+
+            // TODO: Play hit sound effect
+            // AudioManager.Instance.PlaySFX("TowerHit");
         }
-
-        // GÂY SÁT THƯƠNG cho target
-        target.TakeDamage(_damage);
-
-        // SPAWN VFX HIT tại vị trí target
-        Vector3 hitPosition = target.Position;
-        ObjectPoolManager.Instance.Spawn(hitVFXType, hitPosition, Quaternion.identity);
-
-        // TODO: Play hit sound effect
-        // AudioManager.Instance.PlaySFX("TowerHit");
+        else
+        {
+            // Target đã chết giữa chừng (bị Tower khác giết hoặc vào pool)
+            // -> Vẫn spawn VFX nổ "xịt" ở vị trí cuối cùng cho thật (visual feedback)
+            ObjectPoolManager.Instance.Spawn(hitVFXType, lastKnownPosition, Quaternion.identity);
+        }
     }
 
     #endregion
@@ -449,12 +463,12 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
 
     /// <summary>
     /// Callback khi player bấm nút Sell.
-    /// Logic: Trả 50% tiền xây, FreeTile trong WorldMapManager, trả tháp về pool.
+    /// Logic: Trả 80% tiền xây, FreeTile trong WorldMapManager, trả tháp về pool.
     /// </summary>
     public void OnSellClicked()
     {
-        // Tính tiền hoàn (50% BuildCost)
-        int refund = Mathf.RoundToInt(_buildCost * 0.5f);
+        // Tính tiền hoàn (80% BuildCost)
+        int refund = Mathf.RoundToInt(_buildCost * 0.8f);
         Debug.Log($"[TowerBase] {_towerName} đã được bán! Hoàn tiền: {refund} Gold");
 
         // Thêm tiền vào CurrencyManager

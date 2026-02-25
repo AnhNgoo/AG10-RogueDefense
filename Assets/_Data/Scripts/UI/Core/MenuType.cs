@@ -8,6 +8,5 @@ public enum MenuType
     Settings,
     InGameHUD,
     PauseMenu,
-    VictoryScreen,
-    DefeatScreen
+    GameEndMenu
 }

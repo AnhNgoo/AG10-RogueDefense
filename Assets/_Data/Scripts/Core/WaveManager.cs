@@ -123,6 +123,16 @@ public class WaveManager : MonoBehaviour
 
     #endregion
 
+    #region Observer Pattern - Event
+
+    /// <summary>
+    /// Event tĩnh được bắn ra khi người chơi hoàn thành hết tất cả các waves (Chiến thắng).
+    /// OBSERVER PATTERN: GameEndUI sẽ subscribe event này để hiển thị màn hình thắng.
+    /// </summary>
+    public static event Action OnVictory;
+
+    #endregion
+
     #region Unity Lifecycle
 
     private void Awake()
@@ -172,7 +182,9 @@ public class WaveManager : MonoBehaviour
         if (CurrentWave > MaxWaves)
         {
             Debug.Log($"[WaveManager] === YOU WIN! === Đã hoàn thành {MaxWaves} waves!");
-            // TODO: Gọi GameManager.OnVictory() để hiển thị Victory Screen
+
+            // Bắn event để GameEndUI hiển thị màn hình Victory
+            OnVictory?.Invoke();
             return;
         }
 

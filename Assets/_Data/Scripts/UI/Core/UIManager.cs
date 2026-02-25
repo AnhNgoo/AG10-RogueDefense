@@ -83,19 +83,44 @@ public class UIManager : MonoBehaviour
     {
         // Hủy đăng ký sự kiện khi object bị disable/destroy
         SceneManager.sceneLoaded -= OnSceneLoaded;
+        UnsubscribeFromGameEvents();
     }
 
     private void Start()
     {
         RegisterAllMenus();
+        SubscribeToGameEvents();
     }
 
     private void Update()
     {
-        // Xử lý Android Back Button
+        // Xử lý phím ESC (Android Back Button)
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            HandleBackButton();
+            // Nếu có Popup đang mở -> Đóng nó
+            if (_popupStack.Count > 0)
+            {
+                // Lấy popup cuối cùng và gọi Close() thay vì CloseTopPopup()
+                // Điều này sẽ trigger override logic (VD: Resume trong SettingsMenu)
+                MenuType topPopup = _popupStack[_popupStack.Count - 1];
+                if (_menuRegistry.TryGetValue(topPopup, out MenuBase menu))
+                {
+                    menu.Close(); // Gọi Close() để trigger logic Resume trong SettingsMenu
+                }
+            }
+            // Nếu KHÔNG có popup VÀ đang ở Game Scene VÀ chưa Game Over -> Mở Settings
+            else if (SceneManager.GetActiveScene().name == "Game" && _currentMenu != MenuType.GameEndMenu)
+            {
+                // Kiểm tra xem đã có Settings Menu chưa
+                if (_menuRegistry.ContainsKey(MenuType.Settings))
+                {
+                    OpenPopup(MenuType.Settings);
+                }
+                else
+                {
+                    Debug.LogWarning("[UIManager] Không tìm thấy SettingsMenu trong scene!");
+                }
+            }
         }
     }
 
@@ -380,6 +405,112 @@ public class UIManager : MonoBehaviour
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Đóng tất cả Menu và Popup (Dọc dẹp UI trước khi Load Scene).
+    /// Gọi từ GameEndUI trước khi Restart hoặc GoToMainMenu.
+    /// QUAN TRỌNG: Dùng CloseInternal để tránh vòng lặp và hoàn tất nhanh.
+    /// </summary>
+    public void CloseAllMenusAndPopups()
+    {
+        // Đóng tất cả popup trong stack
+        for (int i = _popupStack.Count - 1; i >= 0; i--)
+        {
+            MenuType menuType = _popupStack[i];
+
+            if (_menuRegistry.TryGetValue(menuType, out MenuBase menu))
+            {
+                menu.CloseInternal();
+            }
+        }
+        _popupStack.Clear();
+
+        // Đóng menu hiện tại (nếu có)
+        if (_currentMenu != MenuType.None && _menuRegistry.TryGetValue(_currentMenu, out MenuBase currentMenu))
+        {
+            currentMenu.CloseInternal();
+        }
+        _currentMenu = MenuType.None;
+
+        Debug.Log("[UIManager] Đã dọn dẹp tất cả Menu và Popup.");
+    }
+
+    #endregion
+
+    #region Game Events Subscription
+
+    /// <summary>
+    /// Subscribe vào các Game Events (OnDefeat, OnVictory).
+    /// UIManager làm MEDIATOR giữa Core Systems và GameEndUI.
+    /// Lý do: UIManager luôn active (DontDestroyOnLoad), còn GameEndUI có thể inactive ban đầu.
+    /// </summary>
+    private void SubscribeToGameEvents()
+    {
+        BaseHealthManager.OnDefeat += HandleDefeat;
+        WaveManager.OnVictory += HandleVictory;
+
+        Debug.Log("[UIManager] Đã subscribe vào OnDefeat và OnVictory events");
+    }
+
+    /// <summary>
+    /// Unsubscribe khỏi các Game Events khi UIManager bị disable.
+    /// </summary>
+    private void UnsubscribeFromGameEvents()
+    {
+        BaseHealthManager.OnDefeat -= HandleDefeat;
+        WaveManager.OnVictory -= HandleVictory;
+    }
+
+    /// <summary>
+    /// Callback khi người chơi thua (Base health = 0).
+    /// UIManager gọi GameEndUI.ShowDefeat() thay vì để GameEndUI tự subscribe.
+    /// </summary>
+    private void HandleDefeat()
+    {
+        Debug.Log("[UIManager] HandleDefeat - Gọi GameEndUI.ShowDefeat()");
+
+        if (_menuRegistry.TryGetValue(MenuType.GameEndMenu, out MenuBase menu))
+        {
+            GameEndUI gameEndUI = menu as GameEndUI;
+            if (gameEndUI != null)
+            {
+                gameEndUI.ShowDefeat();
+            }
+            else
+            {
+                Debug.LogError("[UIManager] GameEndMenu không phải là GameEndUI!");
+            }
+        }
+        else
+        {
+            Debug.LogError("[UIManager] Không tìm thấy GameEndMenu trong registry!");
+        }
+    }
+
+    /// <summary>
+    /// Callback khi người chơi thắng (hoàn thành tất cả waves).
+    /// </summary>
+    private void HandleVictory()
+    {
+        Debug.Log("[UIManager] HandleVictory - Gọi GameEndUI.ShowVictory()");
+
+        if (_menuRegistry.TryGetValue(MenuType.GameEndMenu, out MenuBase menu))
+        {
+            GameEndUI gameEndUI = menu as GameEndUI;
+            if (gameEndUI != null)
+            {
+                gameEndUI.ShowVictory();
+            }
+            else
+            {
+                Debug.LogError("[UIManager] GameEndMenu không phải là GameEndUI!");
+            }
+        }
+        else
+        {
+            Debug.LogError("[UIManager] Không tìm thấy GameEndMenu trong registry!");
+        }
     }
 
     #endregion

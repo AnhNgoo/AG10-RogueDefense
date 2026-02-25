@@ -63,6 +63,12 @@ public class BaseHealthManager : MonoBehaviour
     /// </summary>
     public static event Action<int> OnBaseHealthChanged;
 
+    /// <summary>
+    /// Event tĩnh được bắn ra khi Nhà Chính hết máu (Game Over - Defeat).
+    /// OBSERVER PATTERN: GameEndUI sẽ subscribe event này để hiển thị màn hình thua.
+    /// </summary>
+    public static event Action OnDefeat;
+
     #endregion
 
     #region Unity Lifecycle
@@ -168,14 +174,19 @@ public class BaseHealthManager : MonoBehaviour
     {
         Debug.Log("[BaseHealthManager] === GAME OVER === Nhà Chính đã bị phá hủy!");
 
-        // TODO: Gọi GameManager.OnDefeat() để hiển thị Defeat Screen
-        // GameManager.Instance.OnDefeat();
+        // Bắn event để GameEndUI hiển thị màn hình Defeat
+        if (OnDefeat != null)
+        {
+            Debug.Log($"[BaseHealthManager] OnDefeat có {OnDefeat.GetInvocationList().Length} subscribers");
+            OnDefeat.Invoke();
+        }
+        else
+        {
+            Debug.LogError("[BaseHealthManager] OnDefeat == NULL! Không có ai subscribe event này!");
+        }
 
         // TODO: Dừng spawn wave
         // EnemySpawner.Instance.StopSpawning();
-
-        // TODO: Pause game hoặc hiển thị UI Game Over
-        // Time.timeScale = 0f;
     }
 
     #endregion

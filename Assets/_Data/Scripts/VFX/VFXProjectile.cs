@@ -37,6 +37,7 @@ public class VFXProjectile : MonoBehaviour, IPoolable
     private Transform _target;          // Mục tiêu bay tới
     private float _speed;               // Tốc độ bay (units/second)
     private bool _isFlying = false;     // Cờ đang bay
+    private Vector3 _lastKnownPosition; // Vị trí cuối cùng của target (Phantom Target Fix)
 
     #endregion
 
@@ -57,6 +58,9 @@ public class VFXProjectile : MonoBehaviour, IPoolable
         // Lưu target và speed
         _target = target;
         _speed = speed;
+
+        // CRITICAL: Lưu vị trí cuối cùng của target (Phantom Target Fix)
+        _lastKnownPosition = target.position;
 
         // Bắt đầu bay
         _isFlying = true;
@@ -81,38 +85,38 @@ public class VFXProjectile : MonoBehaviour, IPoolable
         // Chỉ update khi đang bay
         if (!_isFlying) return;
 
-        // Kiểm tra target còn tồn tại không
-        if (_target == null)
+        // 1. CRITICAL: Cập nhật vị trí cuối cùng NẾU target còn sống và còn active (Phantom Target Fix)
+        if (_target != null && _target.gameObject.activeInHierarchy)
         {
-            // Target đã bị hủy (enemy chết giữa chừng) -> Return to pool
-            ReturnToPool();
-            return;
+            _lastKnownPosition = _target.position;
+        }
+        else
+        {
+            // Nếu target đã chết/vào pool -> Xóa reference để không truy cập vào Transform bị reset về (0,0,0) nữa
+            _target = null;
         }
 
-        // Lấy vị trí target hiện tại
-        Vector3 targetPosition = _target.position;
+        // 2. Tính khoảng cách đến điểm đến (là _lastKnownPosition, không phải _target.position)
+        float distanceToTarget = Vector3.Distance(transform.position, _lastKnownPosition);
 
-        // Kiểm tra khoảng cách đến target
-        float distanceToTarget = Vector3.Distance(transform.position, targetPosition);
-
-        // Nếu đã đến gần target (threshold ~ 0.1 unit) -> Return to pool
+        // 3. Nếu đã đến đích -> Return to pool
         if (distanceToTarget < 0.1f)
         {
             ReturnToPool();
             return;
         }
 
-        // Di chuyển về phía target (Interpolation, không dùng Physics)
+        // 4. Di chuyển về phía _lastKnownPosition (Interpolation, không dùng Physics)
         transform.position = Vector3.MoveTowards(
             transform.position,
-            targetPosition,
+            _lastKnownPosition,
             _speed * Time.deltaTime
         );
 
-        // Xoay viên đạn nhìn về target (nếu bật)
+        // 5. Xoay viên đạn nhìn về _lastKnownPosition (nếu bật)
         if (_rotateTowardsTarget)
         {
-            Vector3 direction = (targetPosition - transform.position).normalized;
+            Vector3 direction = (_lastKnownPosition - transform.position).normalized;
             if (direction != Vector3.zero)
             {
                 transform.rotation = Quaternion.LookRotation(direction);
