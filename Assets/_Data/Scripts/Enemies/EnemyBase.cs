@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using System.Collections.Generic;
 using Sirenix.OdinInspector;
@@ -38,6 +39,16 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable, IDamageable
 
     #endregion
 
+    #region Observer Pattern - Boss Event
+
+    /// <summary>
+    /// Event tĩnh được bắn ra khi Boss bị tiêu diệt.
+    /// OBSERVER PATTERN: CardSelectionUI sẽ subscribe event này để hiển thị màn hình chọn thẻ bài.
+    /// </summary>
+    public static event Action OnBossDefeated;
+
+    #endregion
+
     #region Movement Configuration
 
     [Title("Configuration", "Movement & Stats", TitleAlignment = TitleAlignments.Centered)]
@@ -63,6 +74,10 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable, IDamageable
     [SerializeField] protected int _goldReward = 10;
 
     [BoxGroup("Stats")]
+    [Tooltip("Đánh dấu nếu đây là Boss (Boss sẽ kích hoạt Card System khi chết)")]
+    [SerializeField] protected bool _isBoss = false;
+
+    [BoxGroup("Stats")]
     [Required]
     [Tooltip("Component quản lý máu (MANDATORY)")]
     [SerializeField] protected HealthComponent healthComponent;
@@ -84,6 +99,9 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable, IDamageable
 
     // Cờ ngăn trừ ActiveEnemies nhiều lần khi chết
     private bool _isCountedAsDead = false;
+
+    // Lưu tốc độ gốc từ Inspector (để không bị ghi đè khi Spawn)
+    private float _originalMoveSpeed;
 
     #endregion
 
@@ -112,6 +130,20 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable, IDamageable
     #endregion
 
     #region Setup & Lifecycle
+
+    /// <summary>
+    /// Đặt trạng thái Boss cho Enemy (gọi bởi EnemySpawner).
+    /// BẮT BUỘC GỌI TRƯỚC Setup() để đảm bảo UI tracking đúng.
+    /// </summary>
+    public void SetBossStatus(bool isBoss)
+    {
+        _isBoss = isBoss;
+
+        if (_isBoss)
+        {
+            Debug.Log($"[{GetType().Name}] Đánh dấu là BOSS! (Wave {(WaveManager.Instance != null ? WaveManager.Instance.CurrentWave : 0)})");
+        }
+    }
 
     /// <summary>
     /// Khởi tạo Enemy với đường đi (Path).
@@ -159,6 +191,15 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable, IDamageable
     /// Hook Method: Override để thực hiện logic custom khi enemy vừa spawn xong.
     /// </summary>
     protected virtual void OnSpawnComplete() { }
+
+    /// <summary>
+    /// Awake: Lưu tốc độ gốc từ Inspector để không bị ghi đè khi Spawn.
+    /// CRITICAL: Phải chạy TRƯỚC khi ObjectPoolManager spawn object.
+    /// </summary>
+    protected virtual void Awake()
+    {
+        _originalMoveSpeed = moveSpeed;
+    }
 
     /// <summary>
     /// Sử dụng FixedUpdate cho di chuyển để đảm bảo chuyển động ổn định.
@@ -347,6 +388,13 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable, IDamageable
             }
         }
 
+        // KIỂM TRA NẾU ĐÂY LÀ BOSS -> BẮN EVENT CHO CARD SYSTEM
+        if (_isBoss)
+        {
+            Debug.Log($"[{GetType().Name}] === BOSS DEFEATED! === Kích hoạt UI Chọn Thẻ Bài (Card System)");
+            OnBossDefeated?.Invoke();
+        }
+
         // Hook: Cho subclass xử lý logic khi chết (spawn VFX, drop loot, etc.)
         OnDie();
 
@@ -388,11 +436,11 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable, IDamageable
         // CRITICAL: Reset cờ đếm chết
         _isCountedAsDead = false;
 
-        // Reset tốc độ về mặc định
-        moveSpeed = 3f;
+        // Reset tốc độ về mặc định (Từ Inspector)
+        moveSpeed = _originalMoveSpeed;
 
         // ANTI-STACKING: Random tốc độ mỗi lần spawn để tránh quái đi trùng khít
-        moveSpeed *= Random.Range(0.8f, 1.2f);
+        moveSpeed *= UnityEngine.Random.Range(0.8f, 1.2f);
 
         // Khởi tạo Health Component
         if (healthComponent != null)

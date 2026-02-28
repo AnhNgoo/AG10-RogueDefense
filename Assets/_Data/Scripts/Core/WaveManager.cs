@@ -100,6 +100,25 @@ public class WaveManager : MonoBehaviour
         // new EnemySpawnConfig { enemyType = PoolType.EnemyBoss, startWave = 10, weight = 1, hpMultiplier = 3.0f },
     };
 
+    [Title("Boss Configuration", TitleAlignment = TitleAlignments.Centered)]
+    [BoxGroup("Boss Settings")]
+    [Tooltip("Cứ mỗi X wave sẽ xuất hiện 1 Boss (Ví dụ: 5 = wave 5, 10, 15...). Set = 0 để tắt Boss.")]
+    [LabelText("Boss Wave Interval")]
+    [Range(0, 10)]
+    public int bossWaveInterval = 5;
+
+    [BoxGroup("Boss Settings")]
+    [Tooltip("Danh sách các loại Boss sẽ xuất hiện xoay vòng. VD: Boss1 -> Boss2 -> Boss3 -> Boss1...")]
+    [LabelText("Boss Types Roster")]
+    [ListDrawerSettings(ShowIndexLabels = true)]
+    public List<PoolType> bossTypes = new List<PoolType>();
+
+    [BoxGroup("Boss Settings")]
+    [Tooltip("Hệ số máu của Boss (So với BaseHP của wave hiện tại). Ví dụ: 5.0 = Boss có máu gấp 5 lần quái thường.")]
+    [LabelText("Boss HP Multiplier")]
+    [Range(2f, 10f)]
+    public float bossHPMultiplier = 5.0f;
+
     #endregion
 
     #region Runtime State
@@ -206,10 +225,28 @@ public class WaveManager : MonoBehaviour
         Debug.Log($"[WaveManager] === WAVE {CurrentWave}/{MaxWaves} ===");
         Debug.Log($"[WaveManager] Enemy Count: {enemyCount}, Base HP: {baseWaveHP:F0}, Valid Types: {validConfigs.Count}");
 
-        // GỌI EnemySpawner để thực thi spawn (COMMAND PATTERN)
+        // KIỂM TRA CÓ PHẢI BOSS WAVE KHÔNG (cứ mỗi bossWaveInterval wave)
+        bool isBossWave = (bossWaveInterval > 0) && (CurrentWave % bossWaveInterval == 0);
+        float bossHP = 0f;
+        PoolType selectedBossType = PoolType.None;
+
+        if (isBossWave && bossTypes.Count > 0)
+        {
+            // TÍNH MÁU BOSS (Base HP * Boss Multiplier)
+            bossHP = baseWaveHP * bossHPMultiplier;
+
+            // TÍNH TOÁN INDEX CỦA BOSS HIỆN TẠI (Dùng Modulo để xoay vòng)
+            // Ví dụ: Interval = 5. Wave 5 -> bossCount = 0. Wave 10 -> bossCount = 1. Wave 15 -> bossCount = 2.
+            int bossCount = (CurrentWave / bossWaveInterval) - 1;
+            selectedBossType = bossTypes[bossCount % bossTypes.Count];
+
+            Debug.Log($"[WaveManager] ⚠️ BOSS WAVE! Boss HP: {bossHP:F0}, Type: {selectedBossType} (Index: {bossCount % bossTypes.Count})");
+        }
+
+        // GỬI EnemySpawner để thực thi spawn (COMMAND PATTERN)
         if (enemySpawner != null)
         {
-            enemySpawner.ExecuteSpawnWave(endChunks, enemyCount, baseWaveHP, validConfigs);
+            enemySpawner.ExecuteSpawnWave(endChunks, enemyCount, baseWaveHP, validConfigs, isBossWave, selectedBossType, bossHP);
         }
         else
         {
@@ -241,15 +278,17 @@ public class WaveManager : MonoBehaviour
 
     /// <summary>
     /// Tính số lượng quái cho wave hiện tại.
-    /// CÔNG THỨC: EnemyCount = BaseCount + (CurrentWave * Multiplier)
-    /// VÍ DỤ: Base=3, Multiplier=1.2
-    ///   - Wave 1: 3 + (1 * 1.2) = 4.2 → 4 quái
-    ///   - Wave 5: 3 + (5 * 1.2) = 9 quái
-    ///   - Wave 10: 3 + (10 * 1.2) = 15 quái
+    /// CÔNG THỨC: EnemyCount = BaseCount + ((CurrentWave - 1) * Multiplier)
+    /// VÍ DỤ: Base=4, Multiplier=1.2
+    ///   - Wave 1: 4 + (0 * 1.2) = 4 → 4 quái (đúng baseCount)
+    ///   - Wave 2: 4 + (1 * 1.2) = 5.2 → 5 quái
+    ///   - Wave 5: 4 + (4 * 1.2) = 8.8 → 9 quái
+    ///   - Wave 10: 4 + (9 * 1.2) = 14.8 → 15 quái
     /// </summary>
     private int CalculateEnemyCount()
     {
-        float rawCount = baseEnemyCount + (CurrentWave * enemyCountMultiplier);
+        // SỬA LỖI: Dùng (CurrentWave - 1) để đảm bảo Wave 1 luôn ra đúng baseEnemyCount
+        float rawCount = baseEnemyCount + ((CurrentWave - 1) * enemyCountMultiplier);
         int finalCount = Mathf.RoundToInt(rawCount);
 
         // Đảm bảo tối thiểu 1 quái

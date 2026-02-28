@@ -154,12 +154,17 @@ public class EnemySpawner : MonoBehaviour
     /// Thực thi spawn wave (KHÔNG tính toán - nhận lệnh từ WaveManager).
     /// SOLID: EnemySpawner chỉ làm "Tay Chân", WaveManager là "Bộ Não".
     /// NÂNG CẤP: Hỗ trợ spawn nhiều loại quái khác nhau trong cùng 1 wave.
+    /// BOSS SYSTEM: Nếu là Boss Wave, sẽ spawn thêm 1 Boss ở cuối wave.
     /// </summary>
     /// <param name="endChunks">Danh sách chunk endpoints để spawn</param>
     /// <param name="enemyCount">Số lượng quái (đã tính bởi WaveManager)</param>
     /// <param name="baseWaveHP">Base HP của wave (chưa nhân hpMultiplier)</param>
     /// <param name="validConfigs">Các loại quái có thể spawn (với weight + hpMultiplier)</param>
-    public void ExecuteSpawnWave(List<ChunkData> endChunks, int enemyCount, float baseWaveHP, List<EnemySpawnConfig> validConfigs)
+    /// <param name="isBossWave">Có phải Boss Wave không? (true = spawn Boss cuối wave)</param>
+    /// <param name="bossType">Loại Boss sẽ spawn</param>
+    /// <param name="bossHP">Máu của Boss</param>
+    public void ExecuteSpawnWave(List<ChunkData> endChunks, int enemyCount, float baseWaveHP, List<EnemySpawnConfig> validConfigs,
+                                  bool isBossWave, PoolType bossType, float bossHP)
     {
         if (isSpawning)
         {
@@ -192,13 +197,19 @@ public class EnemySpawner : MonoBehaviour
 
         Debug.Log($"[EnemySpawner] Executing spawn: {enemyCount} enemies, BaseHP={baseWaveHP:F0}, Types={validConfigs.Count}, Gates={endChunks.Count}");
 
+        // Log Boss info nếu là Boss Wave
+        if (isBossWave)
+        {
+            Debug.Log($"[EnemySpawner] 💀 BOSS WAVE DETECTED! BossType={bossType}, BossHP={bossHP:F0}");
+        }
+
         // BẮN EVENT: Cập nhật Wave Index cho UI (OBSERVER PATTERN)
         int currentWave = WaveManager.Instance != null ? WaveManager.Instance.CurrentWave : 1;
         int maxWaves = WaveManager.Instance != null ? WaveManager.Instance.MaxWaves : 10;
         OnWaveIndexChanged?.Invoke(currentWave, maxWaves);
 
         // Bắt đầu Coroutine spawn
-        spawnCoroutine = StartCoroutine(SpawnWaveCoroutine(endChunks, enemyCount, baseWaveHP, validConfigs));
+        spawnCoroutine = StartCoroutine(SpawnWaveCoroutine(endChunks, enemyCount, baseWaveHP, validConfigs, isBossWave, bossType, bossHP));
     }
 
     /// <summary>
@@ -262,8 +273,10 @@ public class EnemySpawner : MonoBehaviour
     /// <summary>
     /// Coroutine spawn quái từ từ (Round Robin Interleave).
     /// NÂNG CẤP: Chọn loại quái ngẫu nhiên theo weight trước mỗi lần spawn.
+    /// BOSS SYSTEM: Sau khi spawn xong quái thường, nếu là Boss Wave thì spawn thêm Boss.
     /// </summary>
-    private IEnumerator SpawnWaveCoroutine(List<ChunkData> endChunks, int enemyCount, float baseWaveHP, List<EnemySpawnConfig> validConfigs)
+    private IEnumerator SpawnWaveCoroutine(List<ChunkData> endChunks, int enemyCount, float baseWaveHP, List<EnemySpawnConfig> validConfigs,
+                                            bool isBossWave, PoolType bossType, float bossHP)
     {
         isSpawning = true;
 
@@ -316,11 +329,27 @@ public class EnemySpawner : MonoBehaviour
             float finalHP = baseWaveHP * selectedConfig.hpMultiplier;
 
             // Spawn quái với loại và HP đã chọn
-            SpawnEnemyAtChunk(spawnChunk, selectedConfig.enemyType, finalHP);
+            SpawnEnemyAtChunk(spawnChunk, selectedConfig.enemyType, finalHP, false); // false = không phải Boss
             spawnedCount++;
 
             // Delay trước khi spawn con tiếp theo
             yield return new WaitForSeconds(spawnInterval);
+        }
+
+        // === BOSS SYSTEM: SPAWN BOSS NẾU LÀ BOSS WAVE ===
+        if (isBossWave)
+        {
+            // Chờ 1 chút trước khi Boss xuất hiện cho ngầu (dramatic effect)
+            yield return new WaitForSeconds(spawnInterval * 2f);
+
+            // Chọn ngẫu nhiên 1 cổng để Boss ra
+            ChunkData bossChunk = endChunks[UnityEngine.Random.Range(0, endChunks.Count)];
+
+            // Spawn Boss
+            SpawnEnemyAtChunk(bossChunk, bossType, bossHP, true); // true = Boss
+            spawnedCount++;
+
+            Debug.Log($"[EnemySpawner] ⚠️ GỌI BOSS TẠI WAVE {WaveManager.Instance.CurrentWave}! Type: {bossType}, HP: {bossHP:F0}");
         }
 
         // Wave hoàn thành spawn
@@ -370,8 +399,9 @@ public class EnemySpawner : MonoBehaviour
     /// <summary>
     /// Spawn 1 Enemy tại MỘT ExitPoint ngẫu nhiên của chunk.
     /// NÂNG CẤP: Nhận loại quái và HP cụ thể cho từng con.
+    /// BOSS SYSTEM: Nếu isBoss = true, sẽ gọi SetBossStatus() để đánh dấu.
     /// </summary>
-    private void SpawnEnemyAtChunk(ChunkData chunk, PoolType enemyType, float finalHP)
+    private void SpawnEnemyAtChunk(ChunkData chunk, PoolType enemyType, float finalHP, bool isBoss = false)
     {
         // Kiểm tra chunk có exitPoints không
         if (chunk.exitPoints == null || chunk.exitPoints.Count == 0)
@@ -422,6 +452,12 @@ public class EnemySpawner : MonoBehaviour
             EnemyBase enemyScript = enemyObj.GetComponent<EnemyBase>();
             if (enemyScript != null)
             {
+                // ĐÁNH DẤU BOSS (nếu có) TRƯỚC KHI Setup
+                if (isBoss)
+                {
+                    enemyScript.SetBossStatus(true);
+                }
+
                 // ĐẶT MÁU CUSTOM (từ WaveManager) TRƯỚC KHI Setup
                 enemyScript.SetCustomHealth(finalHP);
 
@@ -431,7 +467,8 @@ public class EnemySpawner : MonoBehaviour
                 // Tăng số lượng enemy đang active
                 ActiveEnemies++;
 
-                Debug.Log($"[EnemySpawner] Spawned {enemyType} at {spawnPosition}. HP={finalHP:F0}, ActiveEnemies: {ActiveEnemies}");
+                string bossTag = isBoss ? " [BOSS]" : "";
+                Debug.Log($"[EnemySpawner] Spawned {enemyType}{bossTag} at {spawnPosition}. HP={finalHP:F0}, ActiveEnemies: {ActiveEnemies}");
             }
         }
         else

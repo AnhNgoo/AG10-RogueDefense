@@ -40,7 +40,7 @@ public class CurrencyManager : MonoBehaviour
 
     #region State
 
-    private int _currentGold;
+    [SerializeField] private int _currentGold;
 
     /// <summary>
     /// Property chỉ đọc - Lấy số vàng hiện tại.

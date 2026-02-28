@@ -27,7 +27,13 @@ MonoBehaviour:
       type: 3}
     initialSize: 50
     maxSize: 200
-    parentName: Pool_Enemy
+    parentName: Pool_Enemy_Bassic
+  - poolType: 101
+    prefab: {fileID: 6530707737046039013, guid: aa85b922b3524ad46a35f10c06f3a170,
+      type: 3}
+    initialSize: 25
+    maxSize: 100
+    parentName: Pool_Enemy_Fast
   - poolType: 150
     prefab: {fileID: 1398463576221952648, guid: 91a3e390543ba3c479c2675ef211e906,
       type: 3}
@@ -103,3 +109,27 @@ MonoBehaviour:
     initialSize: 50
     maxSize: 200
     parentName: Pool_VFX
+  - poolType: 102
+    prefab: {fileID: 2655048999811187952, guid: 3bca311556858d44197cc699e445876c,
+      type: 3}
+    initialSize: 50
+    maxSize: 150
+    parentName: Pool_Enemy_Slow
+  - poolType: 103
+    prefab: {fileID: 8760147348165678901, guid: a9c58c36e00827f44b023a5eeafa4818,
+      type: 3}
+    initialSize: 1
+    maxSize: 10
+    parentName: Pool_Boss
+  - poolType: 104
+    prefab: {fileID: 3844441863729714112, guid: 99bd016c164a179458ca06bc98a78505,
+      type: 3}
+    initialSize: 1
+    maxSize: 10
+    parentName: Pool_Boss
+  - poolType: 105
+    prefab: {fileID: 8292688154604367628, guid: 6b32c7407cbb9db4d8e6c5643aafe9bc,
+      type: 3}
+    initialSize: 1
+    maxSize: 10
+    parentName: Pool_Boss

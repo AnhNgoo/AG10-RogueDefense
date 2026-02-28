@@ -175,6 +175,17 @@ public class TowerInteractionManager : SerializedMonoBehaviour
         // Select tháp mới
         _selectedTower = tower;
         _selectedTower.ToggleEditMode(true);
+
+        // Bind dữ liệu tháp vào TowerEditUI (nếu có)
+        TowerEditUI editUI = _selectedTower.GetComponentInChildren<TowerEditUI>();
+        if (editUI != null)
+        {
+            editUI.BindTowerData(_selectedTower);
+        }
+        else
+        {
+            Debug.LogWarning($"[TowerInteractionManager] Tháp {_selectedTower.TowerName} không có TowerEditUI component!");
+        }
     }
 
     /// <summary>

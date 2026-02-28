@@ -9,7 +9,9 @@ public enum PoolType
     EnemyBasic = 100,
     EnemyFast = 101,
     EnemySlow = 102,
-    EnemyBoss = 103,
+    EnemyBoss1 = 103,
+    EnemyBoss2 = 104,
+    EnemyBoss3 = 105,
 
     // === TOWERS ===
     TowerFire = 150,    // Nấm Đỏ - Tấn công nhanh, gây DOT

@@ -1760,7 +1760,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: be595890dc8a6e9458a8cd7b9507a2ef, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _startingGold: 150
+  _startingGold: 250
+  _currentGold: 0
 --- !u!1 &780052766
 GameObject:
   m_ObjectHideFlags: 0
@@ -3809,7 +3810,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f3a709b77b325b14eba6d19c1ab4802b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxHealth: 5
+  _maxHealth: 10
 --- !u!1 &1445632092
 GameObject:
   m_ObjectHideFlags: 0
@@ -3945,10 +3946,10 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 324518751}
   - {fileID: 1667354454}
-  - {fileID: 1683371008}
+  - {fileID: 324518751}
   - {fileID: 780052767}
+  - {fileID: 1683371008}
   - {fileID: 1886030003}
   m_Father: {fileID: 1657965062}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -4140,8 +4141,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6f842225d2da0a4479ead37d0dd29802, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  baseEnemyCount: 1
-  enemyCountMultiplier: 1.2
+  baseEnemyCount: 2
+  enemyCountMultiplier: 1.5
   baseEnemyHP: 10
   enemyHPMultiplier: 1.15
   enemyConfigs:
@@ -4149,6 +4150,17 @@ MonoBehaviour:
     startWave: 1
     weight: 10
     hpMultiplier: 1
+  - enemyType: 101
+    startWave: 5
+    weight: 4
+    hpMultiplier: 0.5
+  - enemyType: 102
+    startWave: 10
+    weight: 3
+    hpMultiplier: 2.5
+  bossWaveInterval: 10
+  bossTypes: 670000006800000069000000
+  bossHPMultiplier: 5
 --- !u!1 &1601296626
 GameObject:
   m_ObjectHideFlags: 0

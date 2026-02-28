@@ -4,12 +4,12 @@ using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 
 /// <summary>
-/// CONCRETE CLASS: EnemyBat - Enemy bay với animation system và attack logic.
+/// CONCRETE CLASS: EnemyUnit - Enemy với animation system và attack logic.
 /// Kế thừa EnemyBase và override các hook methods.
-/// ANIMATION: Place (bay), TurnLeft, TurnRight, TakeDame, Attack.
-/// BEHAVIOR: Vừa bay vừa "nhìn ngó" (Look Around), tấn công khi gần Home.
+/// ANIMATION: Place (bay, nhảy), TurnLeft, TurnRight, TakeDame, Attack.
+/// BEHAVIOR: Vừa bay (nhảy) vừa "nhìn ngó" (Look Around), tấn công khi gần Home.
 /// </summary>
-public class EnemyBat : EnemyBase
+public class EnemyUnit : EnemyBase
 {
     #region Bat Configuration
 
@@ -17,7 +17,7 @@ public class EnemyBat : EnemyBase
 
     [BoxGroup("Flight")]
     [Tooltip("Độ cao bay (Y offset khi spawn)")]
-    [Range(1f, 5f)]
+    [Range(0f, 5f)]
     [SerializeField] private float flyHeight = 2f;
 
     [BoxGroup("Combat")]
@@ -33,6 +33,10 @@ public class EnemyBat : EnemyBase
     [Required]
     [Tooltip("Animator component")]
     [SerializeField] private Animator _animator;
+
+    [BoxGroup("Animation")]
+    [Tooltip("Bật/Tắt hiệu ứng quái vừa di chuyển vừa quay trái/phải ngó nghiêng")]
+    [SerializeField] private bool _enableLookAround = true;
 
     #endregion
 
@@ -98,8 +102,8 @@ public class EnemyBat : EnemyBase
         // Vẫn tiếp tục di chuyển ngay cả khi đang attack
         base.UpdateMovement();
 
-        // Look Around Timer: Vừa bay vừa nhìn ngó
-        if (!isPlayingLookAround && !isPlayingAttack)
+        // Look Around Timer: Vừa bay vừa nhìn ngó (Chỉ khi _enableLookAround = true)
+        if (_enableLookAround && !isPlayingLookAround && !isPlayingAttack)
         {
             lookAroundTimer -= Time.deltaTime;
 

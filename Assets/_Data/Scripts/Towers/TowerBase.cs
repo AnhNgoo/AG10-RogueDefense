@@ -1,6 +1,30 @@
+using System;
 using UnityEngine;
 using Sirenix.OdinInspector;
 using Cysharp.Threading.Tasks;
+
+/// <summary>
+/// Cấu hình nâng cấp tháp (Upgrade Config).
+/// Định nghĩa số liệu tăng cho mỗi lần nâng cấp tháp.
+/// </summary>
+[System.Serializable]
+public struct TowerUpgradeConfig
+{
+    [Tooltip("Tăng giá tiền cho lần nâng cấp tiếp theo")]
+    public int costIncrease;
+
+    [Tooltip("Tăng sát thương mỗi lần nâng cấp")]
+    public float damageIncrease;
+
+    [Tooltip("Tăng tầm bắn mỗi lần nâng cấp")]
+    public float attackRangeIncrease;
+
+    [Tooltip("Giảm Fire Rate (thời gian hồi giữa các phát) để bắn nhanh hơn")]
+    public float fireRateDecrease;
+
+    [Tooltip("Tăng tốc độ bay của viên đạn")]
+    public float bulletSpeedIncrease;
+}
 
 /// <summary>
 /// Base class cho tất cả các loại Tháp.
@@ -50,6 +74,23 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
     [BoxGroup("Stats")]
     [Tooltip("Thời gian hồi giữa các đòn tấn công (Fire Rate)")]
     [SerializeField] protected float _fireRate = 1f;
+
+    [Title("Upgrade Configuration")]
+    [BoxGroup("Stats")]
+    [Tooltip("Cấu hình nâng cấp tháp (tăng damage, range, giảm fire rate, etc.)")]
+    [SerializeField]
+    protected TowerUpgradeConfig _upgradeConfig = new TowerUpgradeConfig
+    {
+        costIncrease = 50,
+        damageIncrease = 5f,
+        attackRangeIncrease = 0.5f,
+        fireRateDecrease = 0.1f,
+        bulletSpeedIncrease = 2f
+    };
+
+    [BoxGroup("Stats")]
+    [Tooltip("Cấp độ tối đa của tháp (VD: 3 = có thể nâng cấp 2 lần từ Lv1 -> Lv3)")]
+    [SerializeField] protected int _maxLevel = 3;
 
     [BoxGroup("Visual")]
     [Tooltip("Transform đầu nòng súng (vị trí spawn đạn)")]
@@ -102,10 +143,30 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
     public string TowerName => _towerName;
     public string Description => _description;
     public int BuildCost => _buildCost;
+    public int UpgradeCost => _upgradeCost;
     public float AttackRange => _attackRange;
     public float Damage => _damage;
     public float FireRate => _fireRate;
+    public float BulletSpeed => bulletSpeed;
     public Transform MuzzlePoint => _muzzlePoint;
+    public int CurrentLevel { get; private set; } = 1;
+    public int MaxLevel => _maxLevel;
+
+    /// <summary>
+    /// Tổng số tiền đã bỏ ra cho tháp này (BuildCost + tất cả UpgradeCost).
+    /// USAGE: Dùng để tính giá Sell = 80% TotalSpent (công bằng với số cấp đã nâng).
+    /// </summary>
+    public int TotalSpent { get; private set; }
+
+    #endregion
+
+    #region Observer Pattern - Tower Events
+
+    /// <summary>
+    /// Event bắn ra khi tháp vừa nâng cấp xong.
+    /// OBSERVER PATTERN: TowerEditUI sẽ subscribe để tự động refresh UI.
+    /// </summary>
+    public event Action OnTowerUpgraded;
 
     #endregion
 
@@ -231,6 +292,9 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
     {
         _isActive = true;
         gameObject.SetActive(true);
+
+        // Reset tổng tiền đã bỏ ra (chỉ bằng BuildCost lúc mới đặt)
+        TotalSpent = _buildCost;
     }
 
     /// <summary>
@@ -439,17 +503,44 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
     /// </summary>
     public void OnUpgradeClicked()
     {
+        // Kiểm tra đã đạt max level chưa
+        if (CurrentLevel >= _maxLevel)
+        {
+            Debug.Log($"[TowerBase] {_towerName} đã đạt cấp độ tối đa (Lv{_maxLevel})!");
+            return;
+        }
+
         // Kiểm tra và trừ tiền
         if (CurrencyManager.Instance != null && CurrencyManager.Instance.TrySpendGold(_upgradeCost))
         {
             // Nâng cấp thành công
             Debug.Log($"[TowerBase] {_towerName} đã được nâng cấp thành công! Chi phí: {_upgradeCost} Gold");
 
-            // TODO: Implement logic nâng cấp stats (tăng damage, range, fire rate, etc.)
-            // _damage *= 1.5f;
-            // _attackRange += 1f;
-            // _fireRate *= 0.8f; // Fire nhanh hơn
-            // _upgradeCost = Mathf.RoundToInt(_upgradeCost * 1.5f); // Tăng giá nâng cấp lần sau
+            // CỘNG ĐỒN CÁC CHỈ SỐ (Incremental Upgrade)
+            _damage += _upgradeConfig.damageIncrease;
+            _attackRange += _upgradeConfig.attackRangeIncrease;
+            _fireRate = Mathf.Max(0.1f, _fireRate - _upgradeConfig.fireRateDecrease); // Đảm bảo không âm
+            bulletSpeed += _upgradeConfig.bulletSpeedIncrease;
+
+            // Cộng vào tổng tiền đã bỏ ra (để tính Sell giá cao hơn)
+            TotalSpent += _upgradeCost;
+
+            // Tăng giá nâng cấp lần tiếp theo
+            _upgradeCost += _upgradeConfig.costIncrease;
+
+            // Tăng level
+            CurrentLevel++;
+
+            Debug.Log($"[TowerBase] {_towerName} giờ ở Lv{CurrentLevel}: DMG={_damage:F1}, Range={_attackRange:F1}, FireRate={_fireRate:F2}s");
+
+            // Bắn event để UI cập nhật
+            OnTowerUpgraded?.Invoke();
+
+            // Cập nhật Range Indicator (nếu đang bật Edit Mode)
+            if (_isEditModeActive && _rangeIndicator != null)
+            {
+                _rangeIndicator.localScale = new Vector3(_attackRange * 2f, _attackRange * 2f, _attackRange * 2f);
+            }
         }
         else
         {
@@ -463,12 +554,12 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
 
     /// <summary>
     /// Callback khi player bấm nút Sell.
-    /// Logic: Trả 80% tiền xây, FreeTile trong WorldMapManager, trả tháp về pool.
+    /// Logic: Trả 80% TỔNG TIỀN đã bỏ ra (bao gồm cả Upgrade), FreeTile, trả tháp về pool.
     /// </summary>
     public void OnSellClicked()
     {
-        // Tính tiền hoàn (80% BuildCost)
-        int refund = Mathf.RoundToInt(_buildCost * 0.8f);
+        // Tính tiền hoàn (80% TotalSpent - công bằng với số cấp đã nâng)
+        int refund = Mathf.RoundToInt(TotalSpent * 0.8f);
         Debug.Log($"[TowerBase] {_towerName} đã được bán! Hoàn tiền: {refund} Gold");
 
         // Thêm tiền vào CurrencyManager
