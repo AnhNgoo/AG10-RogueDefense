@@ -75,6 +75,10 @@ public class GameEndUI : MenuBase
     public void ShowDefeat()
     {
         Debug.Log("[GameEndUI] ShowDefeat được gọi!");
+
+        // Play SFX thua cuộc
+        AudioManager.Instance?.PlaySFX(SoundType.Lose);
+
         ShowUI(isWin: false);
     }
 
@@ -85,6 +89,10 @@ public class GameEndUI : MenuBase
     public void ShowVictory()
     {
         Debug.Log("[GameEndUI] ShowVictory được gọi!");
+
+        // Play SFX chiến thắng
+        AudioManager.Instance?.PlaySFX(SoundType.Victory);
+
         ShowUI(isWin: true);
     }
 
@@ -192,6 +200,10 @@ public class GameEndUI : MenuBase
     {
         Debug.Log("[GameEndUI] Restart Level");
 
+        // CRITICAL: Xóa tất cả enemies và towers trước khi reload scene (fix ghost objects)
+        EnemyBase.ClearAllActiveEnemies();
+        TowerBase.ClearAllTowers();
+
         // Dọn dẹp tất cả UI trước khi load scene mới
         if (UIManager.Instance != null)
         {
@@ -212,6 +224,10 @@ public class GameEndUI : MenuBase
     public void GoToMainMenu()
     {
         Debug.Log($"[GameEndUI] Go to Main Menu: {_mainMenuSceneName}");
+
+        // CRITICAL: Xóa tất cả enemies và towers trước khi load scene mới (fix ghost objects)
+        EnemyBase.ClearAllActiveEnemies();
+        TowerBase.ClearAllTowers();
 
         // Dọn dẹp tất cả UI trước khi load scene mới
         if (UIManager.Instance != null)

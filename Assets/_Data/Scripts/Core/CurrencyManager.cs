@@ -112,6 +112,9 @@ public class CurrencyManager : MonoBehaviour
 
         _currentGold += amount;
 
+        // Play SFX khi nhận vàng
+        AudioManager.Instance?.PlaySFX(SoundType.Coin);
+
         // Bắn event thông báo thay đổi
         OnGoldChanged?.Invoke(_currentGold);
 

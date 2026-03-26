@@ -12,25 +12,21 @@ public class AudioData : ScriptableObject
     [Serializable]
     public class SoundEntry
     {
-        [HorizontalGroup("Sound")]
-        [LabelWidth(100)]
-        [EnumToggleButtons]
+        [BoxGroup("Settings")]
+        [EnumToggleButtons, HideLabel]
         public SoundType Type;
 
-        [HorizontalGroup("Sound")]
-        [ListDrawerSettings(ShowIndexLabels = false, DraggableItems = true, NumberOfItemsPerPage = 3)]
-        [Required]
-        [Tooltip("Playlist: Có thể có nhiều bài nhạc (tự động chuyển bài)")]
-        public List<AudioClip> Clips = new List<AudioClip>();
-
-        [HorizontalGroup("Sound")]
+        [BoxGroup("Settings")]
         [Range(0f, 1f)]
-        [LabelText("Volume")]
         public float Volume = 1f;
 
-        [HorizontalGroup("Sound")]
-        [Tooltip("Phát ngẫu nhiên hay tuần tự?")]
+        [BoxGroup("Settings")]
         public bool Randomize = false;
+
+        [BoxGroup("Clips")]
+        [ListDrawerSettings(ShowIndexLabels = false, DraggableItems = true)]
+        [Required]
+        public List<AudioClip> Clips = new List<AudioClip>();
     }
 
     [Title("Audio Configuration", "Quản lý tất cả âm thanh trong game", TitleAlignment = TitleAlignments.Centered)]

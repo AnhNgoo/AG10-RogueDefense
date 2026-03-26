@@ -127,6 +127,9 @@ public class BaseHealthManager : MonoBehaviour
         // Giới hạn min = 0
         _currentHealth = Mathf.Max(_currentHealth, 0);
 
+        // Play SFX khi nhà chính bị tấn công
+        AudioManager.Instance?.PlaySFX(SoundType.BaseHit);
+
         // Bắn event thông báo thay đổi
         OnBaseHealthChanged?.Invoke(_currentHealth);
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using Sirenix.OdinInspector;
 using Cysharp.Threading.Tasks;
@@ -35,6 +36,16 @@ public struct TowerUpgradeConfig
 /// </summary>
 public abstract class TowerBase : MonoBehaviour, IPoolable
 {
+    #region Static Tracking (For Cleanup)
+
+    /// <summary>
+    /// Danh sách TẤT CẢ towers đang active trong game.
+    /// Dùng để cleanup khi restart/load scene mới.
+    /// </summary>
+    private static readonly List<TowerBase> ActiveTowersList = new List<TowerBase>();
+
+    #endregion
+
     #region IPoolable Implementation
 
     /// <summary>
@@ -295,6 +306,12 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
 
         // Reset tổng tiền đã bỏ ra (chỉ bằng BuildCost lúc mới đặt)
         TotalSpent = _buildCost;
+
+        // Thêm vào danh sách active towers (tracking)
+        if (!ActiveTowersList.Contains(this))
+        {
+            ActiveTowersList.Add(this);
+        }
     }
 
     /// <summary>
@@ -304,6 +321,12 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
     {
         _isActive = false;
         gameObject.SetActive(false);
+
+        // Xóa khỏi danh sách active towers
+        if (ActiveTowersList.Contains(this))
+        {
+            ActiveTowersList.Remove(this);
+        }
     }
 
     #endregion
@@ -364,6 +387,9 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
     protected virtual void Shoot(EnemyBase target)
     {
         if (target == null || target.IsDead) return;
+
+        // Play SFX khi tháp bắn
+        AudioManager.Instance?.PlaySFX(SoundType.TowerShoot);
 
         // 1. SPAWN VIÊN ĐẠN từ Pool
         Vector3 spawnPosition = _muzzlePoint != null ? _muzzlePoint.position : transform.position;
@@ -427,8 +453,8 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
             Vector3 hitPosition = target.Position;
             ObjectPoolManager.Instance.Spawn(hitVFXType, hitPosition, Quaternion.identity);
 
-            // TODO: Play hit sound effect
-            // AudioManager.Instance.PlaySFX("TowerHit");
+            // Play SFX khi trúng enemy
+            AudioManager.Instance?.PlaySFX(SoundType.EnemyHit);
         }
         else
         {
@@ -587,6 +613,51 @@ public abstract class TowerBase : MonoBehaviour, IPoolable
             // Fallback: Destroy nếu không có pool
             Destroy(gameObject);
         }
+    }
+
+    #endregion
+
+    #region Static Cleanup
+
+    /// <summary>
+    /// XÓA TẤT CẢ towers đang active (trả về pool).
+    /// CRITICAL: Gọi trước khi load scene mới để tránh ghost towers.
+    /// Sử dụng: GameEndUI.RestartLevel(), SceneTransition, etc.
+    /// </summary>
+    public static void ClearAllTowers()
+    {
+        // Tạo list tạm để tránh modify collection while iterating
+        List<TowerBase> towersToClearing = new List<TowerBase>(ActiveTowersList);
+
+        Debug.Log($"[TowerBase] Clearing {towersToClearing.Count} active towers...");
+
+        foreach (TowerBase tower in towersToClearing)
+        {
+            if (tower != null && tower.gameObject.activeInHierarchy)
+            {
+                // Trả tower về pool (sẽ tự động remove khỏi ActiveTowersList)
+                if (ObjectPoolManager.Instance != null)
+                {
+                    ObjectPoolManager.Instance.ReturnToPool(tower.gameObject);
+                }
+                else
+                {
+                    // Fallback: Destroy nếu không có pool
+                    tower.gameObject.SetActive(false);
+                }
+            }
+        }
+
+        // Đảm bảo list sạch hoàn toàn
+        ActiveTowersList.Clear();
+
+        // Xóa dữ liệu occupied tiles trong WorldMapManager
+        if (WorldMapManager.Instance != null)
+        {
+            WorldMapManager.Instance.ClearOccupiedTiles();
+        }
+
+        Debug.Log("[TowerBase] All towers cleared!");
     }
 
     #endregion

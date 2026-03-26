@@ -4,19 +4,17 @@
 public enum SoundType
 {
     None = 0,
-    
+
     // === MUSIC ===
     MenuMusic,
     GameplayMusic,
-    VictoryMusic,
-    DefeatMusic,
-    
+
     // === SFX UI ===
     ButtonClick,
     ButtonHover,
     MenuOpen,
     MenuClose,
-    
+
     // === SFX GAMEPLAY ===
     TowerPlace,
     TowerUpgrade,
@@ -25,5 +23,8 @@ public enum SoundType
     EnemyDeath,
     WaveStart,
     WaveComplete,
-    GameOver
+    BaseHit,
+    Coin,
+    Victory,
+    Lose
 }

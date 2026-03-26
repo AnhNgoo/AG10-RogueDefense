@@ -154,6 +154,9 @@ public class ChunkExpandNode : MonoBehaviour
             return;
         }
 
+        // Play SFX khi bấm nút expand
+        AudioManager.Instance?.PlaySFX(SoundType.ButtonClick);
+
         // Gọi WorldMapManager để expand chunk
         if (WorldMapManager.Instance != null)
         {

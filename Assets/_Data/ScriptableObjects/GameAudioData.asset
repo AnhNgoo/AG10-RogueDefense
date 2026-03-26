@@ -14,19 +14,49 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _musicTracks:
   - Type: 1
+    Volume: 1
+    Randomize: 1
     Clips:
     - {fileID: 8300000, guid: 5788a73b406f16b499f7921bdb20e145, type: 3}
     - {fileID: 8300000, guid: a204012382f975a479ae57141d66ff94, type: 3}
-    Volume: 1
-    Randomize: 1
   - Type: 2
+    Volume: 1
+    Randomize: 0
     Clips:
     - {fileID: 8300000, guid: c343d7b7bdd4df541a81bca105d484a2, type: 3}
+  _sfxSounds:
+  - Type: 3
     Volume: 1
     Randomize: 0
-  _sfxSounds:
-  - Type: 5
     Clips:
     - {fileID: 8300000, guid: 8d996a96cdd1f294a81cfde18fbc5c2d, type: 3}
+  - Type: 16
     Volume: 1
     Randomize: 0
+    Clips:
+    - {fileID: 8300000, guid: 7ce3f02fbd5b4284bb308abef5b3133f, type: 3}
+  - Type: 17
+    Volume: 1
+    Randomize: 0
+    Clips:
+    - {fileID: 8300000, guid: a2cb70a8e39c8c04b9c57102d1146dc8, type: 3}
+  - Type: 14
+    Volume: 1
+    Randomize: 0
+    Clips:
+    - {fileID: 8300000, guid: a6baa3d146558944abe7ef738daaa9bb, type: 3}
+  - Type: 10
+    Volume: 1
+    Randomize: 0
+    Clips:
+    - {fileID: 8300000, guid: 79e9693fc7385834d8b15f03017ab62e, type: 3}
+  - Type: 15
+    Volume: 1
+    Randomize: 0
+    Clips:
+    - {fileID: 8300000, guid: 8b9db3515e6267846a2ad1b4f2533f35, type: 3}
+  - Type: 9
+    Volume: 1
+    Randomize: 0
+    Clips:
+    - {fileID: 8300000, guid: a759e8e2f125a2b45ba5c023d1499077, type: 3}

@@ -502,6 +502,45 @@ public abstract class EnemyBase : MonoBehaviour, IPoolable, IDamageable
 
     #endregion
 
+    #region Static Cleanup
+
+    /// <summary>
+    /// XÓA TẤT CẢ enemies đang active (trả về pool).
+    /// CRITICAL: Gọi trước khi load scene mới để tránh ghost enemies.
+    /// Sử dụng: GameEndUI.RestartLevel(), SceneTransition, etc.
+    /// </summary>
+    public static void ClearAllActiveEnemies()
+    {
+        // Tạo list tạm để tránh modify collection while iterating
+        List<EnemyBase> enemiesToClear = new List<EnemyBase>(ActiveEnemiesList);
+
+        Debug.Log($"[EnemyBase] Clearing {enemiesToClear.Count} active enemies...");
+
+        foreach (EnemyBase enemy in enemiesToClear)
+        {
+            if (enemy != null && enemy.gameObject.activeInHierarchy)
+            {
+                // Trả enemy về pool (sẽ tự động remove khỏi ActiveEnemiesList)
+                if (ObjectPoolManager.Instance != null)
+                {
+                    ObjectPoolManager.Instance.ReturnToPool(enemy.gameObject);
+                }
+                else
+                {
+                    // Fallback: Destroy nếu không có pool
+                    enemy.gameObject.SetActive(false);
+                }
+            }
+        }
+
+        // Đảm bảo list sạch hoàn toàn
+        ActiveEnemiesList.Clear();
+
+        Debug.Log("[EnemyBase] All enemies cleared!");
+    }
+
+    #endregion
+
     #region Debug Visualization
 
     protected virtual void OnDrawGizmos()
